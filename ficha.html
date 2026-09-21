@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#100b12">
+    <title>Criar ficha | Crônicas</title>
+    <link rel="stylesheet" href="ficha.css?v=20260921-character-sheet">
+</head>
+<body>
+    <header class="sheet-header">
+        <a class="sheet-brand" href="index.html#personagens" aria-label="Voltar à biblioteca de personagens"><span aria-hidden="true">✦</span> Crônicas</a>
+        <a class="sheet-back" href="index.html#personagens">← Voltar aos personagens</a>
+    </header>
+
+    <main class="sheet-layout">
+        <div class="sheet-intro">
+            <span class="eyebrow">SUA BIBLIOTECA · FICHA DE PERSONAGEM</span>
+            <h1 id="pageTitle">Uma história começa aqui.</h1>
+            <p id="pageDescription">Crie seu personagem em quatro etapas. A ficha ficará na sua biblioteca e poderá ser adicionada às campanhas.</p>
+        </div>
+
+        <nav class="stepper" aria-label="Etapas da ficha">
+            <button type="button" data-step-button="0"><span>01</span> Atributos</button>
+            <button type="button" data-step-button="1"><span>02</span> Origem</button>
+            <button type="button" data-step-button="2"><span>03</span> Classe</button>
+            <button type="button" data-step-button="3"><span>04</span> Toques finais</button>
+        </nav>
+
+        <form id="sheetForm" novalidate>
+            <section class="sheet-step" data-step="0" aria-labelledby="attributesTitle">
+                <div class="step-heading"><span class="eyebrow">ETAPA 01 / 04</span><h2 id="attributesTitle">Escolha seus atributos</h2><p>Todo atributo começa em 1. Distribua 4 pontos. Você pode reduzir um atributo a 0 para ganhar mais 1 ponto; o máximo de cada um é 5.</p></div>
+                <div class="attribute-budget"><span>Pontos para distribuir</span><strong id="pointsRemaining">4</strong></div>
+                <div id="attributeList" class="attribute-list"></div>
+                <p id="attributesError" class="step-error" role="alert" hidden></p>
+            </section>
+
+            <section class="sheet-step" data-step="1" aria-labelledby="originTitle" hidden>
+                <div class="step-heading"><span class="eyebrow">ETAPA 02 / 04</span><h2 id="originTitle">De onde você veio?</h2><p>Sua origem representa a vida antes da campanha. Escolha uma para ver suas perícias e habilidade.</p></div>
+                <div id="originList" class="choice-list"></div>
+                <p id="originError" class="step-error" role="alert" hidden></p>
+            </section>
+
+            <section class="sheet-step" data-step="2" aria-labelledby="classTitle" hidden>
+                <div class="step-heading"><span class="eyebrow">ETAPA 03 / 04</span><h2 id="classTitle">Qual é a sua classe?</h2><p>Escolha Combatente, Especialista ou Ocultista. Se o personagem ainda é uma pessoa comum, escolha Mundano.</p></div>
+                <div id="classList" class="class-grid"></div>
+                <p id="classError" class="step-error" role="alert" hidden></p>
+            </section>
+
+            <section class="sheet-step" data-step="3" aria-labelledby="finalTitle" hidden>
+                <div class="step-heading"><span class="eyebrow">ETAPA 04 / 04</span><h2 id="finalTitle">Dê vida ao personagem</h2><p>Os detalhes abaixo transformam os números em alguém para interpretar. O nome do personagem é o único campo obrigatório.</p></div>
+                <div class="final-grid">
+                    <label class="sheet-field">Nome do personagem <span>*</span><input id="characterName" name="name" maxlength="80" required autocomplete="off" placeholder="Como seu personagem se chama?"></label>
+                    <label class="sheet-field">Nome do jogador<input id="playerName" name="player" maxlength="80" autocomplete="off" placeholder="Quem vai interpretá-lo?"></label>
+                    <label class="sheet-field final-grid__wide">Aparência<textarea id="appearance" name="appearance" maxlength="2000" rows="3" placeholder="Como ele é visto pelos outros?"></textarea></label>
+                    <label class="sheet-field final-grid__wide">Personalidade<textarea id="personality" name="personality" maxlength="2000" rows="3" placeholder="Como ele age, fala e reage?"></textarea></label>
+                    <label class="sheet-field final-grid__wide">História<textarea id="history" name="history" maxlength="4000" rows="5" placeholder="O que aconteceu antes desta aventura?"></textarea></label>
+                    <label class="sheet-field final-grid__wide">Objetivo<textarea id="objective" name="objective" maxlength="2000" rows="3" placeholder="O que ele quer alcançar?"></textarea></label>
+                </div>
+                <div id="sheetSummary" class="sheet-summary"></div>
+                <p id="finalError" class="step-error" role="alert" hidden></p>
+            </section>
+
+            <footer class="sheet-actions">
+                <button id="deleteCharacter" class="button button--danger" type="button" hidden>Excluir ficha</button>
+                <div class="sheet-actions__right">
+                    <button id="previousStep" class="button button--ghost" type="button" hidden>Voltar</button>
+                    <button id="nextStep" class="button button--primary" type="button">Continuar →</button>
+                    <button id="saveCharacter" class="button button--primary" type="submit" hidden>Salvar ficha</button>
+                </div>
+            </footer>
+        </form>
+        <p id="storageNote" class="storage-note" role="status">Por enquanto, suas fichas são salvas neste navegador.</p>
+    </main>
+    <script src="ficha.js?v=20260921-character-sheet"></script>
+</body>
+</html>

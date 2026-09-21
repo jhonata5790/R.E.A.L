@@ -312,7 +312,7 @@ function renderCharacters() {
     renderCards("characterList", state.characters.filter((entry) => matchesQuery(entry, query)),
         query ? "Nenhum personagem encontrado" : "Nenhum personagem ainda",
         query ? "Tente outro termo de busca." : "Crie uma ficha na sua biblioteca de personagens.",
-        (id) => openEntry("character", id));
+        (id) => { location.href = "ficha.html?id=" + encodeURIComponent(id); });
 }
 
 function renderThreats() {
@@ -438,7 +438,6 @@ function openEntry(kind, id = null) {
     $("entryFields").querySelector("input")?.focus();
 }
 
-$("addCharacter").addEventListener("click", () => openEntry("character"));
 $("addHomebrew").addEventListener("click", () => openEntry("homebrew"));
 $("closeEntryDialog").addEventListener("click", () => $("entryDialog").close());
 $("cancelEntryDialog").addEventListener("click", () => $("entryDialog").close());
