@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#100b12">
+    <title>Campanhas | Crônicas</title>
+    <link rel="stylesheet" href="campaign.css?v=20260921-hud-toggle">
+</head>
+<body>
+    <div class="site-shell">
+        <aside class="sidebar">
+            <a class="brand" href="#campanhas" aria-label="Crônicas: campanhas">
+                <span class="brand__mark" aria-hidden="true">✦</span>
+                <span><strong>Crônicas</strong><small>DO SEU RPG</small></span>
+            </a>
+            <div class="sidebar__group-label">SUA BIBLIOTECA</div>
+            <nav class="sidebar__nav" aria-label="Navegação principal">
+                <button class="nav-link is-active" data-view="campanhas" type="button"><span aria-hidden="true">⌂</span> Campanhas</button>
+                <button class="nav-link" data-view="personagens" type="button"><span aria-hidden="true">♟</span> Personagens</button>
+                <button class="nav-link" data-view="ameacas" type="button"><span aria-hidden="true">⚔</span> Ameaças</button>
+                <button class="nav-link" data-view="homebrew" type="button"><span aria-hidden="true">✧</span> Homebrew</button>
+            </nav>
+            <div class="sidebar__footer"><span class="status-dot" aria-hidden="true"></span> Salvo neste navegador</div>
+        </aside>
+
+        <div class="main-column">
+            <header class="topbar">
+                <span class="topbar__eyebrow">CRÔNICAS · ESPAÇO DO MESTRE</span>
+                <span id="storageStatus" class="topbar__status" role="status">Seus dados ficam neste navegador</span>
+            </header>
+
+            <main id="mainContent">
+                <section id="view-campanhas" class="view">
+                    <div class="hero hero--landing">
+                        <div class="hero__copy">
+                            <span class="eyebrow">O COMEÇO DE CADA HISTÓRIA</span>
+                            <h1>Suas campanhas</h1>
+                            <p>Organize suas aventuras e entre na mesa da campanha que vai mestrar.</p>
+                            <div class="hero__actions"><button id="newCampaignHero" class="button button--primary" type="button">+ Nova campanha</button></div>
+                        </div>
+                        <div class="hero__art" role="img" aria-label="Ilustração abstrata da campanha"></div>
+                    </div>
+                    <div class="section-heading">
+                        <div><span class="eyebrow">BIBLIOTECA</span><h2>Campanhas</h2></div>
+                        <span id="campaignCount" class="catalog-count">0 campanhas</span>
+                    </div>
+                    <div id="campaignList" class="campaign-grid"></div>
+                </section>
+
+                <section id="view-campanha" class="view" hidden>
+                    <button id="backToCampaigns" class="text-button" type="button">← Todas as campanhas</button>
+                    <div class="hero hero--detail">
+                        <div class="hero__copy">
+                            <span class="eyebrow">CAMPANHA</span>
+                            <h1 id="detailTitle">Minha campanha</h1>
+                            <p id="detailDescription"></p>
+                            <div class="hero__actions">
+                                <a id="openTabletop" class="button button--primary" href="mesa.html">Entrar na mesa <span aria-hidden="true">→</span></a>
+                                <button id="editCampaign" class="button button--ghost" type="button">Editar campanha</button>
+                            </div>
+                        </div>
+                        <div class="hero__art" role="img" aria-label="Ilustração abstrata da campanha"></div>
+                    </div>
+                    <div class="campaign-sections">
+                        <section class="home-panel">
+                            <div class="home-panel__heading"><span class="eyebrow">ELENCO DA HISTÓRIA</span><h2>Personagens na campanha</h2></div>
+                            <p class="panel-description">Escolha personagens da sua biblioteca para participar desta campanha.</p>
+                            <div class="character-picker">
+                                <label class="sr-only" for="characterPicker">Personagem da biblioteca</label>
+                                <select id="characterPicker"><option value="">Selecione um personagem</option></select>
+                                <button id="assignCharacter" class="button button--primary" type="button">Adicionar</button>
+                            </div>
+                            <div id="campaignCharacters" class="assigned-characters"></div>
+                        </section>
+                        <section class="home-panel">
+                            <div class="home-panel__heading"><span class="eyebrow">MAPA E TOKENS</span><h2>Mesa tática</h2></div>
+                            <div id="tabletopSummary" class="tabletop-summary" role="status">Verificando mesa...</div>
+                            <a id="openTabletopSecondary" class="button button--ghost" href="mesa.html">Abrir mesa <span aria-hidden="true">→</span></a>
+                        </section>
+                    </div>
+                </section>
+
+                <section id="view-personagens" class="view" hidden>
+                    <div class="page-heading"><div><span class="eyebrow">SUA BIBLIOTECA</span><h1>Personagens</h1><p>Fichas de personagens que você pode usar nas suas campanhas.</p></div><button id="addCharacter" class="button button--primary" type="button">+ Novo personagem</button></div>
+                    <div class="catalog-toolbar"><label class="search-field"><span aria-hidden="true">⌕</span><input id="searchCharacters" type="search" placeholder="Buscar personagens" aria-label="Buscar personagens"></label><span id="characterCount" class="catalog-count">0 personagens</span></div>
+                    <div id="characterList" class="entry-grid"></div>
+                </section>
+
+                <section id="view-ameacas" class="view" hidden>
+                    <div class="page-heading"><div><span class="eyebrow">BESTIÁRIO</span><h1>Ameaças</h1><p>Um espaço separado para consultar as criaturas oficiais de Ordem Paranormal.</p></div></div>
+                    <div class="catalog-note"><span aria-hidden="true">✦</span><div><strong>Catálogo oficial em preparação</strong><p>A estrutura de consulta está pronta. Ainda não incluí criaturas ou estatísticas sem uma fonte de conteúdo definida, para não apresentar regras incorretas.</p></div></div>
+                    <div class="catalog-toolbar"><label class="search-field"><span aria-hidden="true">⌕</span><input id="searchThreats" type="search" placeholder="Buscar ameaças" aria-label="Buscar ameaças"></label><span id="threatCount" class="catalog-count">0 ameaças</span></div>
+                    <div id="threatList" class="entry-grid"></div>
+                </section>
+
+                <section id="view-homebrew" class="view" hidden>
+                    <div class="page-heading"><div><span class="eyebrow">SUAS CRIAÇÕES</span><h1>Homebrew</h1><p>Crie conteúdo próprio para usar nas suas histórias.</p></div><button id="addHomebrew" class="button button--primary" type="button">+ Nova criação</button></div>
+                    <div id="homebrewCategories" class="category-tabs" role="group" aria-label="Filtrar homebrew por categoria"></div>
+                    <div class="catalog-toolbar"><label class="search-field"><span aria-hidden="true">⌕</span><input id="searchHomebrew" type="search" placeholder="Buscar criações" aria-label="Buscar criações"></label><span id="homebrewCount" class="catalog-count">0 criações</span></div>
+                    <div id="homebrewList" class="entry-grid"></div>
+                </section>
+            </main>
+        </div>
+    </div>
+
+    <dialog id="campaignDialog" class="editor-dialog" aria-labelledby="campaignDialogTitle">
+        <form id="campaignForm">
+            <header class="editor-dialog__header"><div><span class="eyebrow">CAMPANHAS</span><h2 id="campaignDialogTitle">Nova campanha</h2></div><button id="closeCampaignDialog" class="icon-button" type="button" aria-label="Fechar">×</button></header>
+            <div class="editor-dialog__fields"><label class="form-field">Nome da campanha<input id="campaignNameInput" name="name" maxlength="60" required></label><label class="form-field">Apresentação<textarea id="campaignDescriptionInput" name="description" maxlength="300" rows="4" placeholder="Qual é a premissa da aventura?"></textarea></label></div>
+            <footer class="editor-dialog__footer"><button id="cancelCampaignDialog" class="button button--ghost" type="button">Cancelar</button><button class="button button--primary" type="submit">Salvar campanha</button></footer>
+        </form>
+    </dialog>
+
+    <dialog id="entryDialog" class="editor-dialog" aria-labelledby="entryDialogTitle">
+        <form id="entryForm">
+            <header class="editor-dialog__header"><div><span class="eyebrow">SUA BIBLIOTECA</span><h2 id="entryDialogTitle">Novo registro</h2></div><button id="closeEntryDialog" class="icon-button" type="button" aria-label="Fechar">×</button></header>
+            <div id="entryFields" class="editor-dialog__fields"></div>
+            <footer class="editor-dialog__footer"><button id="deleteEntry" class="button button--danger" type="button" hidden>Excluir</button><button id="cancelEntryDialog" class="button button--ghost" type="button">Cancelar</button><button class="button button--primary" type="submit">Salvar</button></footer>
+        </form>
+    </dialog>
+
+    <script src="campaign.js?v=20260921-hud-toggle"></script>
+</body>
+</html>

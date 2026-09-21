@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>Mesa tática | Crônicas da Campanha</title>
+
+    <link rel="stylesheet" href="style.css?v=20260921-hud-toggle">
+</head>
+
+<body>
+
+    <main id="tabletop">
+
+        <canvas id="gameCanvas"></canvas>
+
+        <div id="emptyTabletop" class="empty-tabletop">
+            <span class="empty-tabletop__mark" aria-hidden="true">✦</span>
+            <h1>Comece sua mesa</h1>
+            <p>Importe um mapa PNG e os seus próprios tokens para preparar a cena.</p>
+            <div class="empty-tabletop__actions">
+                <button id="startMapImport" type="button">Importar mapa</button>
+                <button id="startTokenImport" type="button">Importar tokens</button>
+            </div>
+        </div>
+
+        <a class="campaign-return" href="index.html" aria-label="Voltar ao painel da campanha">← Campanha</a>
+
+        <div id="rulerControls" class="ruler-controls" hidden>
+            <span id="modeBadge">Régua ativa · arraste entre dois pontos</span>
+            <button id="clearMeasurement" type="button" hidden>
+                Limpar medida
+            </button>
+        </div>
+        <div id="saveStatus" class="save-status" aria-live="polite">
+            Mesa pronta
+        </div>
+
+        <section
+            id="gridPanel"
+            class="settings-panel"
+            aria-label="Configurações da grade"
+            hidden
+        >
+            <header class="settings-panel__header">
+                <div>
+                    <p class="settings-panel__eyebrow">MAPA TÁTICO</p>
+                    <h2>Configurar grade</h2>
+                </div>
+
+                <button
+                    id="closeGridPanel"
+                    class="settings-panel__close"
+                    type="button"
+                    aria-label="Fechar configurações da grade"
+                >
+                    ×
+                </button>
+            </header>
+
+            <div class="panel-section">
+                <div class="panel-section__header">
+                    <strong>Imagem do mapa</strong>
+                    <small id="mapName">Nenhum mapa</small>
+                </div>
+
+                <label class="file-import" for="mapFileInput">
+                    Importar mapa PNG
+                    <input
+                        id="mapFileInput"
+                        type="file"
+                        accept="image/png"
+                    >
+                </label>
+
+                <div class="settings-field">
+                    <div class="settings-field__label">
+                        <label for="mapScale">Escala do mapa</label>
+                        <output id="mapScaleValue" for="mapScale">100%</output>
+                    </div>
+                    <input
+                        id="mapScale"
+                        type="range"
+                        min="25"
+                        max="250"
+                        step="5"
+                        value="100"
+                    >
+                </div>
+
+                <div class="settings-origin">
+                    <div>
+                        <span class="settings-origin__title">Posição do mapa</span>
+                        <small id="mapOffsetValue">X 0 · Y 0</small>
+                    </div>
+                    <div class="settings-origin__buttons" aria-label="Mover mapa">
+                        <button type="button" data-map-dx="-10" aria-label="Mover mapa para a esquerda">←</button>
+                        <button type="button" data-map-dy="-10" aria-label="Mover mapa para cima">↑</button>
+                        <button type="button" data-map-dy="10" aria-label="Mover mapa para baixo">↓</button>
+                        <button type="button" data-map-dx="10" aria-label="Mover mapa para a direita">→</button>
+                    </div>
+                </div>
+
+                <button id="resetMap" class="settings-reset" type="button">
+                    Restaurar posição e escala
+                </button>
+                <button id="removeMap" class="settings-reset" type="button" disabled>
+                    Remover mapa
+                </button>
+            </div>
+
+            <div class="panel-divider"></div>
+
+            <label class="settings-toggle" for="gridVisible">
+                <span>Mostrar grade</span>
+                <input id="gridVisible" type="checkbox">
+            </label>
+
+            <div class="settings-field">
+                <div class="settings-field__label">
+                    <label for="gridSize">Tamanho do quadrado</label>
+                    <output id="gridSizeValue" for="gridSize">50 px</output>
+                </div>
+                <input
+                    id="gridSize"
+                    type="range"
+                    min="20"
+                    max="150"
+                    step="5"
+                    value="50"
+                >
+            </div>
+
+            <div class="settings-field">
+                <div class="settings-field__label">
+                    <label for="gridOpacity">Opacidade</label>
+                    <output id="gridOpacityValue" for="gridOpacity">32%</output>
+                </div>
+                <input
+                    id="gridOpacity"
+                    type="range"
+                    min="5"
+                    max="100"
+                    step="5"
+                    value="32"
+                >
+            </div>
+
+            <div class="settings-field">
+                <div class="settings-field__label">
+                    <label for="gridMeters">Distância por quadrado</label>
+                    <output id="gridMetersValue" for="gridMeters">3 m</output>
+                </div>
+                <input
+                    id="gridMeters"
+                    type="range"
+                    min="0.5"
+                    max="15"
+                    step="0.5"
+                    value="3"
+                >
+            </div>
+
+            <div class="settings-origin">
+                <div>
+                    <span class="settings-origin__title">Alinhar origem</span>
+                    <small id="gridOffsetValue">X 0 · Y 0</small>
+                </div>
+
+                <div class="settings-origin__buttons" aria-label="Mover origem da grade">
+                    <button type="button" data-grid-dx="-5" aria-label="Mover grade para a esquerda">←</button>
+                    <button type="button" data-grid-dy="-5" aria-label="Mover grade para cima">↑</button>
+                    <button type="button" data-grid-dy="5" aria-label="Mover grade para baixo">↓</button>
+                    <button type="button" data-grid-dx="5" aria-label="Mover grade para a direita">→</button>
+                </div>
+            </div>
+
+            <button id="resetGrid" class="settings-reset" type="button">
+                Restaurar grade
+            </button>
+
+            <p class="settings-hint">
+                Movimento livre por padrão. Segure <kbd>Shift</kbd> ao soltar um token para encaixá-lo.
+            </p>
+        </section>
+
+        <section
+            id="tokenPanel"
+            class="settings-panel token-panel"
+            aria-label="Biblioteca de tokens"
+            hidden
+        >
+            <header class="settings-panel__header">
+                <div>
+                    <p class="settings-panel__eyebrow">PERSONAGENS</p>
+                    <h2>Biblioteca de tokens</h2>
+                </div>
+
+                <button
+                    id="closeTokenPanel"
+                    class="settings-panel__close"
+                    type="button"
+                    aria-label="Fechar biblioteca de tokens"
+                >
+                    ×
+                </button>
+            </header>
+
+            <div class="token-panel__actions">
+                <label class="token-import" for="tokenFileInput">
+                    <span>Importar tokens</span>
+                    <small>Arquivos PNG</small>
+                    <input
+                        id="tokenFileInput"
+                        type="file"
+                        accept="image/png"
+                        multiple
+                    >
+                </label>
+            </div>
+
+            <div class="token-panel__summary">
+                <span id="tokenCount">0 tokens na mesa</span>
+                <small>Clique para selecionar</small>
+            </div>
+
+            <div
+                id="tokenList"
+                class="token-list"
+                aria-label="Tokens adicionados"
+            ></div>
+
+            <div class="token-panel__selected-actions">
+                <button id="duplicateToken" type="button" disabled>
+                    Duplicar
+                </button>
+                <button id="deleteToken" type="button" disabled>
+                    Excluir
+                </button>
+            </div>
+
+            <section id="tokenInspector" class="token-inspector" hidden>
+                <div class="panel-divider"></div>
+                <p class="settings-panel__eyebrow">FICHA RÁPIDA</p>
+
+                <label class="compact-field">
+                    <span>Nome</span>
+                    <input id="tokenNameInput" type="text" maxlength="40">
+                </label>
+
+                <div class="compact-grid">
+                    <label class="compact-field">
+                        <span>Tipo</span>
+                        <select id="tokenTypeInput">
+                            <option value="player">Jogador</option>
+                            <option value="ally">Aliado</option>
+                            <option value="enemy">Inimigo</option>
+                            <option value="neutral">Neutro</option>
+                        </select>
+                    </label>
+
+                    <label class="compact-field">
+                        <span>Cor</span>
+                        <input id="tokenColorInput" type="color" value="#fb3b53">
+                    </label>
+                </div>
+
+                <div class="compact-grid compact-grid--health">
+                    <label class="compact-field">
+                        <span>Vida atual</span>
+                        <input id="tokenHpInput" type="number" min="0" max="999" value="10">
+                    </label>
+                    <label class="compact-field">
+                        <span>Vida máxima</span>
+                        <input id="tokenMaxHpInput" type="number" min="1" max="999" value="10">
+                    </label>
+                </div>
+
+                <label class="compact-field">
+                    <span>Condições</span>
+                    <input
+                        id="tokenConditionInput"
+                        type="text"
+                        maxlength="60"
+                        placeholder="Ex.: caído, queimando"
+                    >
+                </label>
+
+                <div class="token-visibility" aria-label="Informações visíveis no mapa">
+                    <span class="token-visibility__title">Exibição no mapa</span>
+                    <label class="settings-toggle" for="tokenShowNameInput">
+                        <span>Mostrar nome</span>
+                        <input id="tokenShowNameInput" type="checkbox" checked>
+                    </label>
+                    <label class="settings-toggle" for="tokenShowHealthInput">
+                        <span>Mostrar vida</span>
+                        <input id="tokenShowHealthInput" type="checkbox" checked>
+                    </label>
+                </div>
+
+                <div class="layer-actions">
+                    <button id="sendTokenBackward" type="button">Mandar para trás</button>
+                    <button id="bringTokenForward" type="button">Trazer para frente</button>
+                </div>
+            </section>
+
+            <p class="settings-hint">
+                Atalhos: <kbd>Ctrl</kbd> + <kbd>D</kbd> duplica e <kbd>Delete</kbd> remove o token selecionado.
+            </p>
+        </section>
+
+        <section
+            id="sessionPanel"
+            class="settings-panel session-panel"
+            aria-label="Salvar e carregar mesa"
+            hidden
+        >
+            <header class="settings-panel__header">
+                <div>
+                    <p class="settings-panel__eyebrow">SESSÃO</p>
+                    <h2>Salvar mesa</h2>
+                </div>
+                <button
+                    id="closeSessionPanel"
+                    class="settings-panel__close"
+                    type="button"
+                    aria-label="Fechar painel da sessão"
+                >×</button>
+            </header>
+
+            <p class="session-description">
+                Tokens, mapa, grade e câmera são salvos automaticamente neste navegador.
+            </p>
+
+            <div class="session-actions">
+                <button id="saveSession" type="button">Salvar agora</button>
+                <button id="loadSession" type="button">Carregar última mesa</button>
+                <button id="newSession" class="danger-button" type="button">Nova mesa</button>
+            </div>
+
+            <p id="sessionDetails" class="settings-hint">
+                Nenhuma alteração pendente.
+            </p>
+            <p class="settings-hint">
+                Pressione <kbd>H</kbd> para ocultar ou mostrar a interface da mesa.
+            </p>
+        </section>
+
+        <nav
+            id="toolbar"
+            aria-label="Ferramentas da mesa"
+        >
+
+            <button
+                id="toolMove"
+                type="button"
+                title="Mover câmera"
+                aria-label="Mover câmera"
+            >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M12 3v18"></path>
+                    <path d="M3 12h18"></path>
+                    <path d="M12 3 9 6"></path>
+                    <path d="M12 3 15 6"></path>
+                    <path d="M12 21 9 18"></path>
+                    <path d="M12 21 15 18"></path>
+                    <path d="M3 12 6 9"></path>
+                    <path d="M3 12 6 15"></path>
+                    <path d="M21 12 18 9"></path>
+                    <path d="M21 12 18 15"></path>
+                </svg>
+            </button>
+
+            <button
+                id="toolZoom"
+                type="button"
+                title="Zoom"
+                aria-label="Zoom"
+            >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <circle cx="10.5" cy="10.5" r="6.5"></circle>
+                    <path d="M15.5 15.5 21 21"></path>
+                    <path d="M10.5 7.5v6"></path>
+                    <path d="M7.5 10.5h6"></path>
+                </svg>
+            </button>
+
+            <button
+                id="toolMap"
+                type="button"
+                title="Configurar mapa e grade"
+                aria-label="Configurar mapa e grade"
+                aria-controls="gridPanel"
+                aria-expanded="false"
+            >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M3 5 9 3l6 2 6-2v16l-6 2-6-2-6 2Z"></path>
+                    <path d="M9 3v16"></path>
+                    <path d="M15 5v16"></path>
+                    <path d="M5 9h2"></path>
+                    <path d="M17 14h2"></path>
+                </svg>
+            </button>
+
+            <button
+                id="toolRuler"
+                type="button"
+                title="Medir distância"
+                aria-label="Medir distância"
+                aria-pressed="false"
+            >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="m5 17 12-12 3 3L8 20H4v-4Z"></path>
+                    <path d="m13 9 2 2"></path>
+                    <path d="m10 12 2 2"></path>
+                    <path d="m7 15 2 2"></path>
+                </svg>
+            </button>
+
+            <button
+                id="toolToken"
+                type="button"
+                title="Abrir biblioteca de tokens"
+                aria-label="Abrir biblioteca de tokens"
+                aria-controls="tokenPanel"
+                aria-expanded="false"
+            >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M12 3 19 7v10l-7 4-7-4V7Z"></path>
+                    <circle cx="12" cy="11" r="2.5"></circle>
+                    <path d="M8.5 17c.7-1.8 1.9-2.7 3.5-2.7s2.8.9 3.5 2.7"></path>
+                </svg>
+            </button>
+
+            <button
+                id="toolSession"
+                type="button"
+                title="Salvar e carregar mesa"
+                aria-label="Salvar e carregar mesa"
+                aria-controls="sessionPanel"
+                aria-expanded="false"
+            >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M5 4h12l2 2v14H5Z"></path>
+                    <path d="M8 4v6h8V4"></path>
+                    <path d="M8 20v-6h8v6"></path>
+                </svg>
+            </button>
+
+        </nav>
+
+    </main>
+
+    <script src="script.js?v=20260921-hud-toggle"></script>
+
+</body>
+</html>
