@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Mesa dos jogadores | R.E.A.L</title>
-    <link rel="stylesheet" href="tabletop-guest.css?v=20260928-online-tabletop">
+    <link rel="stylesheet" href="tabletop-guest.css?v=20260928-live-tabletop">
 </head>
 <body>
     <main class="guest-tabletop">
@@ -14,6 +14,7 @@
             <p id="guestStatus" role="status" aria-live="polite">Conectando à mesa…</p>
         </header>
         <div class="guest-tabletop__stage">
+            <video id="guestVideo" aria-label="Transmissão ao vivo da área dos jogadores" autoplay muted playsinline hidden></video>
             <img id="guestFrame" alt="Área da mesa publicada pelo mestre" hidden>
             <div id="guestWaiting" class="guest-tabletop__waiting">
                 <span aria-hidden="true">✦</span>
@@ -25,6 +26,6 @@
     </main>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.3/dist/umd/supabase.js"></script>
     <script src="supabase-config.js?v=20260928-online-tabletop"></script>
-    <script src="tabletop-guest.js?v=20260928-online-tabletop"></script>
+    <script src="tabletop-guest.js?v=20260928-live-tabletop"></script>
 </body>
 </html>

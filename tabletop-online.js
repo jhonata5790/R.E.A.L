@@ -18,6 +18,8 @@
     let publishTimer = null;
     let publishing = false;
     let publishAgain = false;
+    const peers = new Map();
+    const iceServers = [{ urls: "stun:stun.l.google.com:19302" }];
 
     function say(message) { status.textContent = message; }
 
@@ -37,9 +39,85 @@
         copy.disabled = !room?.is_live;
     }
 
+    function closePeers() {
+        peers.forEach(({ connection }) => connection.close());
+        peers.clear();
+    }
+
+    function stopLiveStream() {
+        closePeers();
+        master.stopPlayerStream?.();
+    }
+
+    async function signal(payload) {
+        if (!channel) return;
+        try { await channel.send({ type: "broadcast", event: "rtc", payload }); }
+        catch { /* O convite continua funcionando por imagem se o sinal falhar. */ }
+    }
+
+    async function addRemoteCandidate(peer, candidate) {
+        if (!candidate) return;
+        if (!peer.connection.remoteDescription) {
+            peer.pendingCandidates.push(candidate);
+            return;
+        }
+        try { await peer.connection.addIceCandidate(candidate); }
+        catch { /* Um candidato inválido não deve interromper a mesa. */ }
+    }
+
+    async function startPeer(viewerId) {
+        if (!room?.is_live || !user || typeof RTCPeerConnection === "undefined") return;
+        const existing = peers.get(viewerId);
+        if (existing && !["failed", "closed"].includes(existing.connection.connectionState)
+            && Date.now() - existing.createdAt < 10000) return;
+        if (existing) existing.connection.close();
+        await master.ready;
+        let stream;
+        try { stream = master.startPlayerStream?.(); }
+        catch { return; }
+        if (!stream) return;
+        const connection = new RTCPeerConnection({ iceServers });
+        const sessionId = crypto.randomUUID();
+        const peer = { connection, sessionId, pendingCandidates: [], createdAt: Date.now() };
+        peers.set(viewerId, peer);
+        stream.getTracks().forEach((track) => connection.addTrack(track, stream));
+        connection.onicecandidate = (event) => {
+            if (event.candidate) signal({ kind: "candidate", viewerId, sessionId, candidate: event.candidate.toJSON() });
+        };
+        connection.onconnectionstatechange = () => {
+            if (connection.connectionState === "failed" && peers.get(viewerId) === peer) {
+                connection.close();
+                peers.delete(viewerId);
+            }
+        };
+        try {
+            await connection.setLocalDescription(await connection.createOffer());
+            await signal({ kind: "offer", viewerId, sessionId,
+                description: { type: connection.localDescription.type, sdp: connection.localDescription.sdp } });
+        } catch {
+            connection.close();
+            if (peers.get(viewerId) === peer) peers.delete(viewerId);
+        }
+    }
+
+    async function handleSignal({ payload }) {
+        if (!payload || typeof payload.viewerId !== "string" || !/^[0-9a-f-]{36}$/i.test(payload.viewerId)) return;
+        if (payload.kind === "join") { await startPeer(payload.viewerId); return; }
+        const peer = peers.get(payload.viewerId);
+        if (!peer || peer.sessionId !== payload.sessionId) return;
+        try {
+            if (payload.kind === "answer" && payload.description?.type === "answer") {
+                await peer.connection.setRemoteDescription(payload.description);
+                for (const candidate of peer.pendingCandidates.splice(0)) await addRemoteCandidate(peer, candidate);
+            } else if (payload.kind === "candidate") await addRemoteCandidate(peer, payload.candidate);
+        } catch { /* A conexão poderá ser refeita pelo próximo pedido do jogador. */ }
+    }
+
     function attachChannel() {
         if (channel) client.removeChannel(channel);
-        channel = room ? client.channel(`real-tabletop:${room.invite_code}`).subscribe() : null;
+        closePeers();
+        channel = room ? client.channel(`real-tabletop:${room.invite_code}`)
+            .on("broadcast", { event: "rtc" }, handleSignal).subscribe() : null;
     }
 
     async function loadRoom() {
@@ -52,12 +130,17 @@
         if (error) throw error;
         room = data;
         attachChannel();
+        if (room?.is_live) {
+            try { master.startPlayerStream?.(); }
+            catch { /* A publicação por imagem permanece disponível. */ }
+        }
         showState();
         say(room?.is_live ? "Mesa ao vivo. Os jogadores veem apenas a área publicada." : "Mesa local pronta. Inicie a transmissão para criar um convite.");
     }
 
     async function setUser(nextUser) {
         clearTimeout(publishTimer);
+        stopLiveStream();
         user = nextUser;
         room = null;
         if (channel) { client.removeChannel(channel); channel = null; }
@@ -97,6 +180,8 @@
             const previousCode = room?.invite_code;
             room = result.data;
             if (room.invite_code !== previousCode) attachChannel();
+            try { master.startPlayerStream?.(); }
+            catch { /* O quadro estático continua disponível como reserva. */ }
             showState();
             say(location.protocol === "file:"
                 ? "Ao vivo. Este link local só funciona neste computador; abra o site publicado para convidar outras pessoas."
@@ -118,11 +203,11 @@
     function queuePublish() {
         if (!room?.is_live || !user) return;
         clearTimeout(publishTimer);
-        publishTimer = setTimeout(publish, 750);
+        publishTimer = setTimeout(publish, 2000);
     }
 
     async function stop() {
-        if (!room || !user) return;
+        if (!room || !user) return false;
         clearTimeout(publishTimer);
         toggle.disabled = true;
         try {
@@ -131,10 +216,13 @@
                 .eq("id", room.id).select("id,invite_code,is_live,published_at").single();
             if (error) throw error;
             room = data;
+            await signal({ kind: "ended" });
+            stopLiveStream();
             showState();
             say("Transmissão encerrada. A mesa continua salva neste navegador.");
             await sendChanged();
-        } catch { say("Não foi possível encerrar a transmissão. Tente novamente."); }
+            return true;
+        } catch { say("Não foi possível encerrar a transmissão. Tente novamente."); return false; }
         finally { toggle.disabled = false; }
     }
 
@@ -166,6 +254,7 @@
     authForm.addEventListener("submit", (event) => { event.preventDefault(); authenticate(false); });
     $("onlineSignUp").addEventListener("click", () => authenticate(true));
     $("onlineSignOut").addEventListener("click", async () => {
+        if (room?.is_live && !await stop()) return;
         const { error } = await client.auth.signOut();
         if (error) { say("Não foi possível sair da conta."); return; }
         await setUser(null);

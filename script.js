@@ -10,6 +10,7 @@ const VIEW_RULES = window.REAL_TABLETOP_VIEW;
 const previewDialog = $("playerPreview");
 const previewCanvas = $("playerPreviewCanvas");
 const previewCtx = previewCanvas.getContext("2d");
+let playerStream = null;
 
 const THEME = { background: "#070509", grid: "#cd263d", accent: "#fb3b53", accentSoft: "#fecdd3" };
 const DEFAULT_GRID = { visible: false, size: 50, opacity: 0.32, offsetX: 0, offsetY: 0, metersPerSquare: 3 };
@@ -52,7 +53,7 @@ function requestRender() {
     requestAnimationFrame(() => {
         renderFrameRequested = false;
         draw();
-        if (previewDialog.open) drawPlayerPreview();
+        if (previewDialog.open || playerStream) drawPlayerPreview();
     });
 }
 
@@ -1191,6 +1192,18 @@ const tabletopReady = initialize();
 window.REAL_TABLETOP_MASTER = Object.freeze({
     ready: tabletopReady,
     campaignKey: campaignId || "autosave",
+    startPlayerStream() {
+        if (playerStream) return playerStream;
+        if (typeof previewCanvas.captureStream !== "function") return null;
+        drawPlayerPreview();
+        playerStream = previewCanvas.captureStream(24);
+        return playerStream;
+    },
+    stopPlayerStream() {
+        if (!playerStream) return;
+        playerStream.getTracks().forEach((track) => track.stop());
+        playerStream = null;
+    },
     capturePlayerFrame() {
         drawPlayerPreview();
         const published = document.createElement("canvas");
