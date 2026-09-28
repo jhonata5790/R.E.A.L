@@ -7,35 +7,14 @@ const ATTRIBUTES = [
     { id: "vigor", name: "Vigor", hint: "Resistência e fôlego" }
 ];
 const ATTRIBUTE_TOTAL = 9;
-const ORIGINS = [
-    {
-        id: "criminoso", name: "Criminoso",
-        description: "Você viveu fora da lei e acabou envolvido com a Ordem. Seu passado pode ser um recurso — ou um problema.",
-        skills: "Crime e Furtividade",
-        ability: "O Crime Compensa",
-        effect: "Ao fim de uma missão, escolha um item encontrado. Na próxima missão, ele pode entrar no inventário sem contar no limite de itens por patente."
-    },
-    {
-        id: "amnesico", name: "Amnésico",
-        description: "Você perdeu a maior parte das lembranças. A Ordem é a família que conhece agora, mas cada missão pode revelar um pedaço do passado.",
-        skills: "Duas perícias à escolha do mestre",
-        ability: "Vislumbres do Passado",
-        effect: "Uma vez por sessão, faça um teste de Intelecto (DT 10) ao encontrar alguém ou algum lugar familiar. Se passar, receba 1d4 PE temporários e uma informação útil, a critério do mestre."
-    },
-    {
-        id: "cultista-arrependido", name: "Cultista Arrependido",
-        description: "Você fez parte de um culto paranormal, mas decidiu lutar do outro lado. Conquistar a confiança da Ordem ainda é um desafio.",
-        skills: "Ocultismo e Religião",
-        ability: "Traços do Outro Lado",
-        effect: "Escolha um poder paranormal. Você começa o jogo com metade da Sanidade normal para a sua classe."
-    }
-];
+const ORIGINS = window.REAL_ORIGINS;
 const CLASSES = [
     { id: "combatente", name: "Combatente", description: "Enfrenta o perigo diretamente e protege o grupo em combate." },
     { id: "especialista", name: "Especialista", description: "Resolve problemas com técnica, investigação e perícias." },
     { id: "ocultista", name: "Ocultista", description: "Estuda e utiliza o paranormal, com todos os riscos que isso traz." },
     { id: "mundano", name: "Mundano", description: "Ainda não escolheu uma das três classes da Ordem." }
 ];
+const ATTRIBUTE_THEMES = window.REAL_ATTRIBUTE_THEMES;
 const $ = (id) => document.getElementById(id);
 const stepSections = [...document.querySelectorAll(".sheet-step")];
 const stepButtons = [...document.querySelectorAll("[data-step-button]")];
@@ -72,7 +51,14 @@ let origin = normalizedChoice(existing?.origin, ORIGINS);
 let characterClass = normalizedChoice(existing?.class || existing?.role, CLASSES);
 let currentStep = 0;
 let furthestStep = existing ? 3 : 0;
+let selectedAttributeId = ATTRIBUTES[0].id;
+let themeImageRequest = 0;
 const attributeControls = new Map();
+const themeImageCache = new Map();
+const originItems = new Map();
+const classControls = new Map();
+let openOriginId = null;
+let originCloseTimer = null;
 
 function persistState() {
     try {
@@ -108,27 +94,37 @@ function showError(index, message) {
 }
 
 function renderAttributes() {
-    const list = $("attributeList");
-    ATTRIBUTES.forEach(({ id, name, hint }) => {
-        const row = make("div", "attribute-row");
-        const label = make("div", "attribute-row__label");
-        label.append(make("strong", "", name), make("small", "", hint));
-        const controls = make("div", "attribute-row__controls");
-        const minus = make("button", "", "−");
-        minus.type = "button";
-        minus.setAttribute("aria-label", "Diminuir " + name);
-        const value = make("output", "", String(attributes[id]));
-        value.setAttribute("aria-label", name);
-        const plus = make("button", "", "+");
-        plus.type = "button";
-        plus.setAttribute("aria-label", "Aumentar " + name);
-        minus.addEventListener("click", () => changeAttribute(id, -1));
-        plus.addEventListener("click", () => changeAttribute(id, 1));
-        controls.append(minus, value, plus);
-        row.append(label, controls);
-        list.append(row);
-        attributeControls.set(id, { minus, plus, value });
+    const targets = $("attributeWheelTargets");
+    $("attributeWheelImage").addEventListener("error", (event) => {
+        const fallback = ATTRIBUTE_THEMES.neutral.image;
+        if (event.currentTarget.getAttribute("src") !== fallback) event.currentTarget.src = fallback;
     });
+    ATTRIBUTES.forEach(({ id, name }) => {
+        const button = make("button", "attribute-wheel__target");
+        button.type = "button";
+        button.dataset.attribute = id;
+        button.setAttribute("aria-pressed", "false");
+        const value = make("span", "attribute-wheel__value", String(attributes[id]));
+        value.setAttribute("aria-hidden", "true");
+        button.append(value);
+        button.addEventListener("click", () => selectAttribute(id));
+        targets.append(button);
+        attributeControls.set(id, { button, value, name });
+    });
+    $("decreaseAttribute").addEventListener("click", () => changeAttribute(selectedAttributeId, -1));
+    $("increaseAttribute").addEventListener("click", () => changeAttribute(selectedAttributeId, 1));
+    selectAttribute(selectedAttributeId);
+    updateAttributeControls();
+}
+
+function selectAttribute(id) {
+    selectedAttributeId = id;
+    const selected = ATTRIBUTES.find((attribute) => attribute.id === id);
+    $("selectedAttributeName").textContent = selected.name;
+    $("selectedAttributeDescription").textContent = selected.hint;
+    $("selectedAttributeValue").setAttribute("aria-label", "Valor de " + selected.name);
+    $("decreaseAttribute").setAttribute("aria-label", "Diminuir " + selected.name);
+    $("increaseAttribute").setAttribute("aria-label", "Aumentar " + selected.name);
     updateAttributeControls();
 }
 
@@ -136,11 +132,14 @@ function updateAttributeControls() {
     const remaining = pointsRemaining();
     const zeros = Object.values(attributes).filter((value) => value === 0).length;
     $("pointsRemaining").textContent = remaining;
-    ATTRIBUTES.forEach(({ id }) => {
+    $("selectedAttributeValue").textContent = attributes[selectedAttributeId];
+    $("decreaseAttribute").disabled = attributes[selectedAttributeId] === 0 || (attributes[selectedAttributeId] === 1 && zeros > 0);
+    $("increaseAttribute").disabled = attributes[selectedAttributeId] === 5 || remaining === 0;
+    ATTRIBUTES.forEach(({ id, name }) => {
         const control = attributeControls.get(id);
         control.value.textContent = attributes[id];
-        control.minus.disabled = attributes[id] === 0 || (attributes[id] === 1 && zeros > 0);
-        control.plus.disabled = attributes[id] === 5 || remaining === 0;
+        control.button.setAttribute("aria-label", `Selecionar ${name}, valor ${attributes[id]}`);
+        control.button.setAttribute("aria-pressed", String(id === selectedAttributeId));
     });
 }
 
@@ -153,47 +152,184 @@ function changeAttribute(id, delta) {
     updateAttributeControls();
 }
 
+function resolveThemeImage(path) {
+    if (themeImageCache.has(path)) return Promise.resolve(themeImageCache.get(path));
+    return new Promise((resolve) => {
+        const image = new Image();
+        image.onload = () => { themeImageCache.set(path, path); resolve(path); };
+        image.onerror = () => {
+            const fallback = ATTRIBUTE_THEMES.neutral.image;
+            themeImageCache.set(path, fallback);
+            resolve(fallback);
+        };
+        image.src = path;
+    });
+}
+
+async function updateTheme({ instant = false } = {}) {
+    const key = ATTRIBUTE_THEMES[characterClass] ? characterClass : "neutral";
+    const theme = ATTRIBUTE_THEMES[key];
+    document.body.dataset.characterTheme = key;
+    document.body.style.setProperty("--accent", theme.accent);
+    document.body.style.setProperty("--accent-light", theme.accentLight);
+    document.body.style.setProperty("--accent-ink", theme.accentInk);
+    document.body.style.setProperty("--accent-rgb", theme.accentRgb);
+    document.body.style.setProperty("--border", theme.border);
+    document.body.style.setProperty("--theme-glow", theme.glow);
+    $("attributeThemeLabel").textContent = theme.label;
+    ATTRIBUTES.forEach(({ id }) => {
+        const [x, y] = theme.centers[id];
+        const button = attributeControls.get(id).button;
+        button.style.setProperty("--wheel-x", `${x}%`);
+        button.style.setProperty("--wheel-y", `${y}%`);
+        button.style.setProperty("--wheel-value-top", `${theme.valueTop[id] ?? (id === "presenca" || id === "vigor" ? 17 : 22)}%`);
+    });
+
+    const wheel = $("attributeWheelImage");
+    const frame = wheel.closest(".attribute-wheel");
+    frame.classList.remove("is-switching");
+    const request = ++themeImageRequest;
+    const source = await resolveThemeImage(theme.image);
+    if (request !== themeImageRequest) return;
+    if (wheel.getAttribute("src") === source) return;
+    if (instant || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+        wheel.src = source;
+        return;
+    }
+    frame.classList.add("is-switching");
+    window.setTimeout(() => {
+        if (request !== themeImageRequest) return;
+        wheel.src = source;
+        frame.classList.remove("is-switching");
+    }, 120);
+}
+
 function renderOrigins() {
     ORIGINS.forEach((option) => {
-        const card = make("button", "choice-card");
-        card.type = "button";
-        card.setAttribute("aria-pressed", String(origin === option.id));
-        const top = make("span", "choice-card__top");
-        top.append(make("strong", "", option.name), make("span", "choice-card__tag", origin === option.id ? "Escolhida" : "Escolher"));
-        const skills = make("small");
-        skills.append(make("b", "", "Perícias treinadas: "), document.createTextNode(option.skills));
-        const ability = make("small");
-        ability.append(make("b", "", option.ability + ": "), document.createTextNode(option.effect));
-        card.append(top, make("p", "", option.description), skills, ability);
-        card.addEventListener("click", () => {
+        const item = make("article", "origin-item");
+        const header = make("button", "origin-item__header");
+        header.type = "button";
+        header.id = `origin-heading-${option.id}`;
+        header.setAttribute("aria-controls", `origin-panel-${option.id}`);
+        header.setAttribute("aria-expanded", "false");
+        const badge = make("span", "origin-item__badge", "Escolhida");
+        const chevron = make("span", "origin-item__chevron");
+        chevron.setAttribute("aria-hidden", "true");
+        header.append(make("strong", "origin-item__name", option.name), badge, chevron);
+
+        const panel = make("div", "origin-item__panel");
+        panel.id = `origin-panel-${option.id}`;
+        panel.setAttribute("role", "region");
+        panel.setAttribute("aria-labelledby", header.id);
+        panel.setAttribute("aria-hidden", "true");
+        panel.inert = true;
+        const content = make("div", "origin-item__panel-inner");
+        const skills = make("div", "origin-item__detail");
+        skills.append(make("span", "origin-item__detail-label", "Perícias treinadas:"), make("p", "", option.skills));
+        const ability = make("div", "origin-item__detail origin-item__detail--ability");
+        ability.append(make("h3", "", option.ability), make("p", "", option.effect));
+        const choose = make("button", "button button--primary origin-item__choose", "Escolher esta origem");
+        choose.type = "button";
+        content.append(make("p", "origin-item__description", option.description), skills, ability, choose);
+        panel.append(content);
+        item.append(header, panel);
+        originItems.set(option.id, { item, header, panel, badge, choose, name: option.name });
+        header.addEventListener("click", () => setOpenOrigin(openOriginId === option.id ? null : option.id));
+        choose.addEventListener("click", () => {
             origin = option.id;
             clearError(1);
-            [...$("originList").children].forEach((item) => {
-                const selected = item === card;
-                item.setAttribute("aria-pressed", String(selected));
-                item.querySelector(".choice-card__tag").textContent = selected ? "Escolhida" : "Escolher";
-            });
+            updateOriginSelection();
+            header.focus({ preventScroll: true });
+            const close = () => { if (openOriginId === option.id) setOpenOrigin(null); };
+            if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) close();
+            else originCloseTimer = window.setTimeout(close, 180);
         });
-        $("originList").append(card);
+        $("originList").append(item);
+    });
+    updateOriginSelection();
+    if (existing && origin) setOpenOrigin(origin);
+}
+
+function setOpenOrigin(id) {
+    if (originCloseTimer !== null) window.clearTimeout(originCloseTimer);
+    originCloseTimer = null;
+    openOriginId = id;
+    originItems.forEach(({ item, header, panel }, itemId) => {
+        const expanded = itemId === id;
+        item.dataset.open = String(expanded);
+        header.setAttribute("aria-expanded", String(expanded));
+        panel.setAttribute("aria-hidden", String(!expanded));
+        panel.inert = !expanded;
+    });
+}
+
+function updateOriginSelection() {
+    originItems.forEach(({ item, header, badge, choose, name }, itemId) => {
+        const selected = itemId === origin;
+        item.dataset.selected = String(selected);
+        header.setAttribute("aria-label", selected ? `${name}, escolhida` : name);
+        badge.hidden = !selected;
+        choose.disabled = selected;
+        choose.textContent = selected ? "Origem escolhida" : "Escolher esta origem";
     });
 }
 
 function renderClasses() {
+    const grid = make("div", "class-grid");
+    const mundane = make("div", "mundane-choice");
     CLASSES.forEach((option) => {
-        const card = make("button", "class-card");
-        card.type = "button";
-        card.setAttribute("aria-pressed", String(characterClass === option.id));
-        card.append(make("span", "class-card__tag", characterClass === option.id ? "Escolhida" : "Escolher"), make("strong", "", option.name), make("p", "", option.description));
-        card.addEventListener("click", () => {
+        let item;
+        let badge;
+        let button;
+        if (option.id === "mundano") {
+            item = mundane;
+            const description = make("span", "mundane-choice__description", option.description);
+            description.id = "class-description-mundano";
+            button = make("button", "mundane-choice__button", "Escolher Mundano");
+            button.setAttribute("aria-describedby", description.id);
+            item.append(description, button);
+        } else {
+            item = make("article", "class-card");
+            const heading = make("div", "class-card__heading");
+            const name = make("h3", "", option.name);
+            name.id = `class-name-${option.id}`;
+            badge = make("span", "class-card__tag", "Escolhida");
+            heading.append(name, badge);
+            const description = make("div", "class-card__description");
+            description.id = `class-description-${option.id}`;
+            description.tabIndex = 0;
+            description.setAttribute("role", "region");
+            description.setAttribute("aria-labelledby", name.id);
+            description.append(make("p", "", option.description));
+            button = make("button", "button button--primary class-card__choose", "Escolher esta classe");
+            button.setAttribute("aria-describedby", description.id);
+            item.append(heading, description, button);
+            grid.append(item);
+        }
+        button.type = "button";
+        classControls.set(option.id, { item, button, badge });
+        button.addEventListener("click", () => {
             characterClass = option.id;
             clearError(2);
-            [...$("classList").children].forEach((item) => {
-                const selected = item === card;
-                item.setAttribute("aria-pressed", String(selected));
-                item.querySelector(".class-card__tag").textContent = selected ? "Escolhida" : "Escolher";
-            });
+            updateTheme();
+            updateClassSelection();
         });
-        $("classList").append(card);
+    });
+    $("classList").append(grid, mundane);
+    updateClassSelection();
+}
+
+function updateClassSelection() {
+    classControls.forEach(({ item, button, badge }, id) => {
+        const selected = id === characterClass;
+        const name = CLASSES.find((option) => option.id === id).name;
+        item.dataset.selected = String(selected);
+        button.setAttribute("aria-pressed", String(selected));
+        button.setAttribute("aria-label", selected ? (id === "mundano" ? "Mundano escolhido" : `Classe ${name} escolhida`) : `Escolher ${name}`);
+        button.textContent = id === "mundano"
+            ? (selected ? "Mundano escolhido" : "Escolher Mundano")
+            : (selected ? "Classe escolhida" : "Escolher esta classe");
+        if (badge) badge.hidden = !selected;
     });
 }
 
@@ -262,12 +398,13 @@ function saveCharacter(event) {
         originName: selectedOrigin.name,
         class: characterClass,
         role: selectedClass.name,
+        nex: window.REAL_NEX_RULES.normalizeNex(characterClass, existing?.nex),
         description: values.history
     };
     const index = existing ? state.characters.findIndex((entry) => entry.id === existing.id) : -1;
     if (index >= 0) state.characters[index] = character;
     else state.characters.unshift(character);
-    if (persistState()) location.href = "index.html#personagens";
+    if (persistState()) location.href = "personagem.html?id=" + encodeURIComponent(character.id);
 }
 
 function deleteCharacter() {
@@ -283,7 +420,7 @@ if (existing) {
     $("pageTitle").textContent = "Editar " + (existing.name || "personagem");
     $("pageDescription").textContent = "Revise os atributos, a origem, a classe e os detalhes desta ficha.";
     $("deleteCharacter").hidden = false;
-    document.title = (existing.name || "Editar ficha") + " | Crônicas";
+    document.title = (existing.name || "Editar ficha") + " | R.E.A.L";
 }
 for (const id of ["name", "player", "appearance", "personality", "history", "objective"]) {
     const field = document.querySelector(`[name="${id}"]`);
@@ -293,6 +430,7 @@ $("characterName").addEventListener("input", () => clearError(3));
 renderAttributes();
 renderOrigins();
 renderClasses();
+updateTheme({ instant: true });
 showStep(0);
 $("previousStep").addEventListener("click", () => showStep(Math.max(0, currentStep - 1)));
 $("nextStep").addEventListener("click", () => { if (validateStep(currentStep)) showStep(currentStep + 1); });

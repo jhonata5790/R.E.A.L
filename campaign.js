@@ -142,7 +142,7 @@ function navigate(view, id = null, fromHistory = false) {
     if (view === "campanha") renderCampaignDetail();
     const hash = view === "campanha" ? "#campanha/" + encodeURIComponent(id) : "#" + view;
     if (!fromHistory && location.hash !== hash) history.pushState(null, "", hash);
-    document.title = (view === "campanha" ? campaignById(id)?.name : ({ campanhas: "Campanhas", personagens: "Personagens", ameacas: "Ameaças", homebrew: "Homebrew" })[view]) + " | Crônicas";
+    document.title = (view === "campanha" ? campaignById(id)?.name : ({ campanhas: "Campanhas", personagens: "Personagens", ameacas: "Ameaças", homebrew: "Homebrew" })[view]) + " | R.E.A.L";
     scrollTo(0, 0);
 }
 
@@ -312,7 +312,7 @@ function renderCharacters() {
     renderCards("characterList", state.characters.filter((entry) => matchesQuery(entry, query)),
         query ? "Nenhum personagem encontrado" : "Nenhum personagem ainda",
         query ? "Tente outro termo de busca." : "Crie uma ficha na sua biblioteca de personagens.",
-        (id) => { location.href = "ficha.html?id=" + encodeURIComponent(id); });
+        (id) => { location.href = "personagem.html?id=" + encodeURIComponent(id); });
 }
 
 function renderThreats() {

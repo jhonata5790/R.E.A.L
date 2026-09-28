@@ -7,9 +7,9 @@
         content="width=device-width, initial-scale=1.0"
     >
 
-    <title>Mesa tática | Crônicas da Campanha</title>
+    <title>Mesa tática | R.E.A.L</title>
 
-    <link rel="stylesheet" href="style.css?v=20260921-hud-toggle">
+    <link rel="stylesheet" href="style.css?v=20260928-online-tabletop">
 </head>
 
 <body>
@@ -292,6 +292,10 @@
 
                 <div class="token-visibility" aria-label="Informações visíveis no mapa">
                     <span class="token-visibility__title">Exibição no mapa</span>
+                    <label class="settings-toggle" for="tokenVisibleToPlayersInput">
+                        <span>Visível para jogadores</span>
+                        <input id="tokenVisibleToPlayersInput" type="checkbox" checked>
+                    </label>
                     <label class="settings-toggle" for="tokenShowNameInput">
                         <span>Mostrar nome</span>
                         <input id="tokenShowNameInput" type="checkbox" checked>
@@ -333,7 +337,7 @@
             </header>
 
             <p class="session-description">
-                Tokens, mapa, grade e câmera são salvos automaticamente neste navegador.
+                Tokens, mapa, grade, câmera e área dos jogadores são salvos automaticamente neste navegador.
             </p>
 
             <div class="session-actions">
@@ -349,6 +353,56 @@
                 Pressione <kbd>H</kbd> para ocultar ou mostrar a interface da mesa.
             </p>
         </section>
+
+        <section id="playerViewPanel" class="settings-panel player-view-panel" aria-label="Área visível para os jogadores" hidden>
+            <header class="settings-panel__header">
+                <div><p class="settings-panel__eyebrow">VISÃO PUBLICADA</p><h2>Área dos jogadores</h2></div>
+                <button id="closePlayerViewPanel" class="settings-panel__close" type="button" aria-label="Fechar área dos jogadores">×</button>
+            </header>
+            <p class="player-view-panel__copy">O retângulo mostra o que os jogadores verão. Sua câmera pode passear livremente fora dele.</p>
+            <div class="player-view-panel__actions">
+                <button id="movePlayerView" type="button" aria-pressed="false">Mover retângulo no mapa</button>
+                <button id="alignPlayerView" type="button">Centralizar na minha visão</button>
+            </div>
+            <label class="player-view-panel__size" for="playerViewWidth">Largura da área <output id="playerViewSize">1200</output> px do mapa</label>
+            <input id="playerViewWidth" type="range" min="400" max="4000" step="50" value="1200">
+            <div class="player-view-panel__directions" aria-label="Mover área dos jogadores">
+                <button type="button" data-player-dy="-50" aria-label="Mover área dos jogadores para cima">↑</button>
+                <button type="button" data-player-dx="-50" aria-label="Mover área dos jogadores para a esquerda">←</button>
+                <button type="button" data-player-dy="50" aria-label="Mover área dos jogadores para baixo">↓</button>
+                <button type="button" data-player-dx="50" aria-label="Mover área dos jogadores para a direita">→</button>
+            </div>
+            <button id="openPlayerPreview" class="player-view-panel__preview" type="button">Ver como jogador</button>
+            <div class="tabletop-online" aria-labelledby="onlineTitle">
+                <h3 id="onlineTitle">Mesa online</h3>
+                <p id="onlineStatus" class="tabletop-online__status" role="status">Conectando…</p>
+                <form id="onlineAuthForm" class="tabletop-online__form" hidden>
+                    <label>E-mail do mestre<input id="onlineEmail" type="email" autocomplete="email" required></label>
+                    <label>Senha<input id="onlinePassword" type="password" autocomplete="current-password" minlength="6" required></label>
+                    <div class="tabletop-online__actions">
+                        <button id="onlineSignIn" type="submit">Entrar</button>
+                        <button id="onlineSignUp" type="button">Criar conta</button>
+                    </div>
+                </form>
+                <div id="onlineMasterControls" class="tabletop-online__controls" hidden>
+                    <p id="onlineMasterName" class="tabletop-online__account"></p>
+                    <button id="onlineToggle" type="button">Iniciar transmissão</button>
+                    <label for="onlineInvite">Convite dos jogadores</label>
+                    <div class="tabletop-online__invite">
+                        <input id="onlineInvite" type="text" readonly aria-label="Link de convite dos jogadores">
+                        <button id="onlineCopy" type="button" disabled>Copiar</button>
+                    </div>
+                    <button id="onlineSignOut" class="tabletop-online__signout" type="button">Sair da conta</button>
+                </div>
+                <p class="settings-hint">O convite mostra apenas a área publicada. Quem recebe o link pode observar, sem mover a mesa.</p>
+            </div>
+        </section>
+
+        <dialog id="playerPreview" class="player-preview" aria-labelledby="playerPreviewTitle">
+            <div class="player-preview__header"><div><span>PRÉVIA LOCAL</span><h2 id="playerPreviewTitle">Visão dos jogadores</h2></div><button id="closePlayerPreview" type="button" aria-label="Fechar prévia dos jogadores">×</button></div>
+            <canvas id="playerPreviewCanvas" width="960" height="540" aria-label="Prévia da área visível aos jogadores"></canvas>
+            <p>Somente a área do retângulo e os tokens publicados aparecem aqui. Na mesa online, esta é a visão enviada aos jogadores.</p>
+        </dialog>
 
         <nav
             id="toolbar"
@@ -436,6 +490,10 @@
                 </svg>
             </button>
 
+            <button id="toolPlayerView" type="button" title="Área dos jogadores" aria-label="Área dos jogadores" aria-controls="playerViewPanel" aria-expanded="false">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="1"></rect><path d="M8 12h8M12 8v8"></path></svg>
+            </button>
+
             <button
                 id="toolSession"
                 type="button"
@@ -455,7 +513,11 @@
 
     </main>
 
-    <script src="script.js?v=20260921-hud-toggle"></script>
+    <script src="tabletop-view.js?v=20260927-player-view"></script>
+    <script src="script.js?v=20260928-online-tabletop"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.3/dist/umd/supabase.js"></script>
+    <script src="supabase-config.js?v=20260928-online-tabletop"></script>
+    <script src="tabletop-online.js?v=20260928-online-tabletop"></script>
 
 </body>
 </html>

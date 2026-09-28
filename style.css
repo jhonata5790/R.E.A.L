@@ -229,6 +229,67 @@ body.hud-hidden #tabletop > :not(#gameCanvas) {
     outline-offset: 2px;
 }
 
+.player-view-panel__copy {
+    margin: 0 0 16px;
+    color: #d7c5ce;
+    font-size: 12px;
+    line-height: 1.5;
+    text-align: left;
+}
+
+.player-view-panel__actions { display: grid; gap: 8px; }
+.player-view-panel__actions button,
+.player-view-panel__preview { min-height: 42px; padding: 9px 12px; font: 700 12px "Segoe UI", Arial, sans-serif; }
+.player-view-panel__actions button[aria-pressed="true"] { color: #241b1b; background: #f4d7a1; border-color: #f4d7a1; }
+.player-view-panel__size { display: flex; justify-content: space-between; gap: 12px; margin: 18px 0 9px; font-size: 12px; text-align: left; }
+.player-view-panel__size output { white-space: nowrap; }
+#playerViewWidth { width: 100%; accent-color: #f4d7a1; }
+.player-view-panel__directions { display: flex; justify-content: center; gap: 8px; margin: 14px 0; }
+.player-view-panel__directions button { width: 44px; height: 44px; font-size: 20px; }
+.player-view-panel__preview { width: 100%; color: #241b1b !important; background: #f4d7a1 !important; border-color: #f4d7a1 !important; }
+.player-view-panel .settings-hint { margin-top: 12px; text-align: left; }
+
+.tabletop-online { margin-top: 20px; padding-top: 18px; border-top: 1px solid #72555e; text-align: left; }
+.tabletop-online h3 { margin: 0 0 8px; color: #fff1f3; font-size: 15px; }
+.tabletop-online__status { min-height: 34px; margin: 0 0 12px; color: #f4d7a1; font-size: 12px; line-height: 1.45; }
+.tabletop-online__form,
+.tabletop-online__controls { display: grid; gap: 10px; }
+.tabletop-online__form[hidden],
+.tabletop-online__controls[hidden] { display: none; }
+.tabletop-online label { display: grid; gap: 5px; color: #eadce1; font-size: 12px; }
+.tabletop-online input { min-width: 0; width: 100%; min-height: 42px; padding: 9px 10px; color: #fff1f3; background: #130d14; border: 1px solid #755962; border-radius: 6px; font: inherit; }
+.tabletop-online__actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.tabletop-online__actions button,
+.tabletop-online__controls button { min-height: 44px; padding: 9px 12px; font: 700 12px "Segoe UI", Arial, sans-serif; }
+.tabletop-online__account { margin: 0; color: #cfbcc6; font-size: 11px; overflow-wrap: anywhere; }
+.tabletop-online__invite { display: flex; gap: 6px; min-width: 0; }
+.tabletop-online__invite input { flex: 1; }
+.tabletop-online__invite button { flex: none; }
+.tabletop-online__signout { justify-self: start; }
+.tabletop-online .settings-hint { margin-bottom: 0; }
+
+.player-preview {
+    position: fixed;
+    inset: 0;
+    width: min(1050px, calc(100vw - 32px));
+    max-height: calc(100vh - 32px);
+    margin: auto;
+    padding: 16px;
+    color: #fff1f3;
+    background: #160f16;
+    border: 1px solid #9b7b63;
+    border-radius: 12px;
+    box-shadow: 0 28px 90px #000c;
+}
+.player-preview::backdrop { background: #030204d9; }
+.player-preview__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.player-preview__header span { color: #f4d7a1; font-size: 10px; font-weight: 750; letter-spacing: .16em; }
+.player-preview__header h2 { margin-top: 3px; font-size: 19px; }
+.player-preview__header button { width: 44px; height: 44px; color: #fff1f3; background: #2b2028; border: 1px solid #755962; border-radius: 8px; font-size: 24px; cursor: pointer; }
+.player-preview__header button:focus-visible { outline: 2px solid #f4d7a1; outline-offset: 2px; }
+#playerPreviewCanvas { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; background: #070509; border: 1px solid #6a555b; }
+.player-preview > p { margin-top: 10px; color: #c9b8c2; font-size: 11px; line-height: 1.4; }
+
 .settings-panel__close {
     width: 34px;
     height: 34px;
@@ -790,4 +851,15 @@ body.hud-hidden #tabletop > :not(#gameCanvas) {
 
 #toolbar button[aria-expanded="true"]::after {
     background: var(--accent);
+}
+
+@media (max-width: 520px) {
+    #toolbar { max-width: calc(100vw - 16px); gap: 4px; padding: 7px; }
+    #toolbar button { width: 40px; height: 44px; }
+    #toolbar button svg { width: 21px; height: 21px; }
+    .player-preview { width: calc(100vw - 16px); padding: 10px; }
+}
+
+@media (max-width: 360px) {
+    #toolbar button { width: 36px; }
 }

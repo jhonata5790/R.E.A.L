@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mesa dos jogadores | R.E.A.L</title>
+    <link rel="stylesheet" href="tabletop-guest.css?v=20260928-online-tabletop">
+</head>
+<body>
+    <main class="guest-tabletop">
+        <header class="guest-tabletop__header">
+            <a href="index.html" aria-label="Voltar ao R.E.A.L">R.E.A.L</a>
+            <span>VISÃO DOS JOGADORES</span>
+            <p id="guestStatus" role="status" aria-live="polite">Conectando à mesa…</p>
+        </header>
+        <div class="guest-tabletop__stage">
+            <img id="guestFrame" alt="Área da mesa publicada pelo mestre" hidden>
+            <div id="guestWaiting" class="guest-tabletop__waiting">
+                <span aria-hidden="true">✦</span>
+                <h1>Aguardando o mestre</h1>
+                <p>A cena aparecerá aqui quando a transmissão começar.</p>
+            </div>
+        </div>
+        <p class="guest-tabletop__note">Esta é uma visão somente para observar. O mestre controla o mapa e os tokens.</p>
+    </main>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.3/dist/umd/supabase.js"></script>
+    <script src="supabase-config.js?v=20260928-online-tabletop"></script>
+    <script src="tabletop-guest.js?v=20260928-online-tabletop"></script>
+</body>
+</html>

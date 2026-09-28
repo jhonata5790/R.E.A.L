@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#111113">
+    <title>Ficha de personagem | R.E.A.L</title>
+    <link rel="stylesheet" href="personagem.css?v=20260927-nex-resources">
+</head>
+<body>
+    <header class="view-header">
+        <a class="view-brand" href="index.html#personagens" aria-label="R.E.A.L — voltar à biblioteca de personagens"><span class="view-brand__mark" aria-hidden="true">✦</span><span class="view-brand__copy"><strong>R.E.A.L</strong><small>RPG entre amigos loucos</small></span></a>
+        <a class="view-back" href="index.html#personagens">← Biblioteca de personagens</a>
+    </header>
+
+    <main class="view-layout">
+        <section id="missingCharacter" class="missing-character" hidden>
+            <span class="eyebrow">FICHA NÃO ENCONTRADA</span>
+            <h1>Não encontramos este personagem.</h1>
+            <p>Ele pode ter sido removido ou estar salvo em outro navegador.</p>
+            <a class="button button--primary" href="index.html#personagens">Voltar aos personagens</a>
+        </section>
+
+        <div id="characterContent" hidden>
+            <section class="character-hero" aria-labelledby="characterName">
+                <div class="character-hero__intro">
+                    <span class="eyebrow">SUA BIBLIOTECA · FICHA DE PERSONAGEM</span>
+                    <h1 id="characterName"></h1>
+                    <div class="character-hero__meta"><p id="characterTheme" class="character-theme"></p><span id="characterNex" class="character-nex"></span></div>
+                </div>
+                <a id="editCharacter" class="button button--primary" href="ficha.html">Editar criação</a>
+            </section>
+
+            <nav id="sheetTabs" class="sheet-tabs" role="tablist" aria-label="Seções da ficha">
+                <button id="tab-informacoes" type="button" role="tab" aria-controls="panel-informacoes" data-sheet-tab="informacoes">Informações</button>
+                <button id="tab-descricoes" type="button" role="tab" aria-controls="panel-descricoes" data-sheet-tab="descricoes">Descrições</button>
+                <button id="tab-atributos" type="button" role="tab" aria-controls="panel-atributos" data-sheet-tab="atributos">Atributos</button>
+                <button id="tab-pericias" type="button" role="tab" aria-controls="panel-pericias" data-sheet-tab="pericias">Perícias</button>
+                <button id="tab-combate" type="button" role="tab" aria-controls="panel-combate" data-sheet-tab="combate">Combate</button>
+                <button id="tab-inventario" type="button" role="tab" aria-controls="panel-inventario" data-sheet-tab="inventario">Inventário</button>
+                <button id="tab-habilidades" type="button" role="tab" aria-controls="panel-habilidades" data-sheet-tab="habilidades">Habilidades</button>
+                <button id="tab-rituais" type="button" role="tab" aria-controls="panel-rituais" data-sheet-tab="rituais">Rituais</button>
+            </nav>
+
+            <section id="panel-informacoes" class="sheet-panel" role="tabpanel" aria-labelledby="tab-informacoes">
+                <div class="section-heading"><span class="eyebrow">QUEM ESTÁ NA HISTÓRIA</span><h2>Informações</h2></div>
+                <dl class="info-list">
+                    <div><dt>Personagem</dt><dd id="infoCharacterName"></dd></div>
+                    <div><dt>Jogador</dt><dd id="characterPlayer"></dd></div>
+                    <div><dt>Origem</dt><dd id="characterOrigin"></dd></div>
+                    <div><dt>Classe</dt><dd id="characterClass"></dd></div>
+                    <div><dt>Campanha</dt><dd id="characterCampaign"></dd></div>
+                </dl>
+            </section>
+
+            <section id="panel-descricoes" class="sheet-panel" role="tabpanel" aria-labelledby="tab-descricoes" hidden>
+                <div class="section-heading"><span class="eyebrow">A PESSOA POR TRÁS DA FICHA</span><h2>Descrições</h2></div>
+                <nav class="sub-tabs" role="tablist" aria-label="Conteúdo das descrições">
+                    <button id="subtab-textos" type="button" role="tab" aria-controls="subpanel-textos" data-description-tab="textos">Textos</button>
+                    <button id="subtab-anotacoes" type="button" role="tab" aria-controls="subpanel-anotacoes" data-description-tab="anotacoes">Anotações · mapa mental</button>
+                </nav>
+                <div id="subpanel-textos" role="tabpanel" aria-labelledby="subtab-textos" class="narrative-fields">
+                    <div><h3>Aparência</h3><p id="characterAppearance"></p></div>
+                    <div><h3>Personalidade</h3><p id="characterPersonality"></p></div>
+                    <div><h3>História</h3><p id="characterHistory"></p></div>
+                    <div><h3>Objetivo</h3><p id="characterObjective"></p></div>
+                </div>
+                <div id="subpanel-anotacoes" role="tabpanel" aria-labelledby="subtab-anotacoes" hidden>
+                    <p class="section-copy">Monte ideias livremente. Use a alça para mover as formas; escreva dentro delas. As anotações ficam salvas neste navegador.</p>
+                    <div id="noteWorkspace" class="note-workspace">
+                        <div class="note-toolbar" role="toolbar" aria-label="Ferramentas do mapa mental">
+                            <button type="button" data-add-shape="square">+ Quadrado</button>
+                            <button type="button" data-add-shape="rectangle">+ Retângulo</button>
+                            <button type="button" data-add-shape="triangle">+ Triângulo</button>
+                            <button type="button" data-add-shape="circle">+ Círculo</button>
+                            <button id="toggleNotesFullscreen" class="note-toolbar__fullscreen" type="button">Tela cheia</button>
+                        </div>
+                        <div class="note-canvas-scroll"><div id="noteCanvas" class="note-canvas" aria-label="Mapa mental do personagem"></div></div>
+                    </div>
+                </div>
+            </section>
+
+            <section id="panel-atributos" class="sheet-panel" role="tabpanel" aria-labelledby="tab-atributos" hidden>
+                <div class="section-heading"><span class="eyebrow">NÚMEROS DO PERSONAGEM</span><h2>Atributos</h2></div>
+                <div class="attributes-layout">
+                    <div class="attribute-display">
+                    <figure class="attribute-wheel" aria-label="Roda de atributos do personagem">
+                        <img id="attributeWheelImage" src="assets/atributos-indefinido.png" alt="Roda com Agilidade, Força, Intelecto, Presença e Vigor" width="1254" height="1254">
+                        <div id="attributeWheelValues" class="attribute-wheel__values" aria-hidden="true"></div>
+                    </figure>
+                    <dl id="attributeList" class="attribute-list" aria-label="Valores dos atributos"></dl>
+                    </div>
+                    <div class="attribute-details">
+                        <div class="stat-grid">
+                            <div class="nex-stat"><label for="nexSelect">NEX</label><select id="nexSelect" aria-label="Nível de exposição paranormal"></select></div>
+                            <div><span>PE / turno</span><strong id="pePerTurn">—</strong></div>
+                            <div><span>Deslocamento</span><strong>—</strong></div>
+                        </div>
+                        <p id="nexExplanation" class="nex-explanation"></p>
+                        <div class="resource-list">
+                            <section class="resource-item" data-resource="vida" aria-label="Pontos de Vida">
+                                <div class="resource-item__heading"><strong>Vida</strong><span><output id="vidaValue">—</output> / <output id="vidaMaximum">—</output> PV</span></div>
+                                <div class="resource-item__controls"><button id="vidaDecrease" type="button" aria-label="Diminuir Vida em 1">−</button><label>Valor atual<input id="vidaCurrent" type="number" min="0" step="1" inputmode="numeric" aria-label="Vida atual"></label><button id="vidaIncrease" type="button" aria-label="Aumentar Vida em 1">+</button></div>
+                                <progress id="vidaProgress" max="1" value="0" aria-label="Vida restante"></progress>
+                            </section>
+                            <section class="resource-item" data-resource="esforco" aria-label="Pontos de Esforço">
+                                <div class="resource-item__heading"><strong>Esforço</strong><span><output id="esforcoValue">—</output> / <output id="esforcoMaximum">—</output> PE</span></div>
+                                <div class="resource-item__controls"><button id="esforcoDecrease" type="button" aria-label="Diminuir Esforço em 1">−</button><label>Valor atual<input id="esforcoCurrent" type="number" min="0" step="1" inputmode="numeric" aria-label="Esforço atual"></label><button id="esforcoIncrease" type="button" aria-label="Aumentar Esforço em 1">+</button></div>
+                                <progress id="esforcoProgress" max="1" value="0" aria-label="Esforço restante"></progress>
+                            </section>
+                            <section class="resource-item" data-resource="sanidade" aria-label="Pontos de Sanidade">
+                                <div class="resource-item__heading"><strong>Sanidade</strong><span><output id="sanidadeValue">—</output> / <output id="sanidadeMaximum">—</output> SAN</span></div>
+                                <div class="resource-item__controls"><button id="sanidadeDecrease" type="button" aria-label="Diminuir Sanidade em 1">−</button><label>Valor atual<input id="sanidadeCurrent" type="number" min="0" step="1" inputmode="numeric" aria-label="Sanidade atual"></label><button id="sanidadeIncrease" type="button" aria-label="Aumentar Sanidade em 1">+</button></div>
+                                <progress id="sanidadeProgress" max="1" value="0" aria-label="Sanidade restante"></progress>
+                            </section>
+                        </div>
+                        <details class="resource-adjustments"><summary>Ajustes de máximos para poderes, itens ou regras da mesa</summary><div class="resource-adjustments__fields"><label>Vida<input id="vidaBonus" type="number" min="-999" max="999" step="1" inputmode="numeric" aria-label="Ajuste do máximo de Vida"></label><label>Esforço<input id="esforcoBonus" type="number" min="-999" max="999" step="1" inputmode="numeric" aria-label="Ajuste do máximo de Esforço"></label><label>Sanidade<input id="sanidadeBonus" type="number" min="-999" max="999" step="1" inputmode="numeric" aria-label="Ajuste do máximo de Sanidade"></label></div></details>
+                        <p id="resourceMessage" class="resource-message" role="status" aria-live="polite"></p>
+                        <dl class="defense-list">
+                            <div><dt>Defesa</dt><dd>—</dd></div>
+                            <div><dt>Bloqueio</dt><dd>—</dd></div>
+                            <div><dt>Esquiva</dt><dd>—</dd></div>
+                            <div><dt>Proteção</dt><dd>—</dd></div>
+                            <div><dt>Resistência</dt><dd>—</dd></div>
+                            <div><dt>Proficiências</dt><dd>—</dd></div>
+                        </dl>
+                        <p class="pending-note">Trilhas, poderes e alterações de proteção ou resistência ainda são registrados manualmente. Use os ajustes de máximos quando algum efeito mudar PV, PE ou SAN.</p>
+                    </div>
+                </div>
+            </section>
+
+            <section id="panel-pericias" class="sheet-panel" role="tabpanel" aria-labelledby="tab-pericias" hidden>
+                <div class="section-heading"><span class="eyebrow">TREINAMENTO</span><h2>Perícias</h2></div>
+                <p class="section-copy">Escolha o atributo usado nos dados, defina o treino e ajuste outros bônus. Clique no D20 ao lado do nome para rolar.</p>
+                <p id="originTrainingSummary" class="origin-training-summary"></p>
+                <div id="originTrainingChoices" class="origin-training-choices" hidden>
+                    <p>Amnésico: escolha com o mestre duas perícias diferentes para receber +5 de treino.</p>
+                    <div class="origin-training-choices__fields">
+                        <label>Primeira perícia<select id="originSkillChoice1" aria-label="Primeira perícia treinada pela origem"></select></label>
+                        <label>Segunda perícia<select id="originSkillChoice2" aria-label="Segunda perícia treinada pela origem"></select></label>
+                    </div>
+                    <p id="originTrainingMessage" class="origin-training-message" role="status" aria-live="polite"></p>
+                </div>
+                <div class="skills-table-wrap">
+                    <table class="skills-table">
+                        <thead><tr><th scope="col">Perícia</th><th scope="col">Dados</th><th scope="col">Bônus</th><th scope="col">Treino</th><th scope="col">Outros</th></tr></thead>
+                        <tbody id="skillsBody"></tbody>
+                    </table>
+                </div>
+                <p class="skills-legend">* Marcador de treino (não bloqueia rolagens) · + Penalidade de carga quando aplicável.</p>
+            </section>
+            <section id="panel-combate" class="sheet-panel" role="tabpanel" aria-labelledby="tab-combate" hidden>
+                <div class="section-heading"><span class="eyebrow">EM CONFRONTO</span><h2>Combate</h2></div>
+                <div class="combat-equipped"><h3>Arma equipada</h3><div id="equippedWeapon" aria-live="polite"></div></div>
+            </section>
+            <section id="panel-inventario" class="sheet-panel" role="tabpanel" aria-labelledby="tab-inventario" hidden>
+                <div class="section-heading"><span class="eyebrow">O QUE CARREGA</span><h2>Inventário</h2></div>
+                <div class="section-actions"><p>Itens, armas, proteção, objetos gerais e itens amaldiçoados ficam organizados aqui.</p><button type="button" class="button button--primary" data-add-entry="inventario">+ Adicionar ao inventário</button></div>
+                <nav class="inventory-filters" aria-label="Filtrar inventário">
+                    <button type="button" data-inventory-filter="todos">Todos</button>
+                    <button type="button" data-inventory-filter="itens">Itens</button>
+                    <button type="button" data-inventory-filter="armas">Armas</button>
+                    <button type="button" data-inventory-filter="protecao">Proteção</button>
+                    <button type="button" data-inventory-filter="geral">Geral</button>
+                    <button type="button" data-inventory-filter="amaldicoados">Amaldiçoados</button>
+                </nav>
+                <div id="inventoryList" class="entry-list entry-list--accordion"></div>
+            </section>
+            <section id="panel-habilidades" class="sheet-panel" role="tabpanel" aria-labelledby="tab-habilidades" hidden>
+                <div class="section-heading"><span class="eyebrow">O QUE SABE FAZER</span><h2>Habilidades</h2></div>
+                <div class="section-actions"><p>A habilidade da origem aparece automaticamente aqui. Você também pode registrar outras habilidades do personagem.</p><button type="button" class="button button--primary" data-add-entry="habilidades">+ Adicionar habilidade</button></div>
+                <div id="abilitiesList" class="entry-list entry-list--accordion"></div>
+            </section>
+            <section id="panel-rituais" class="sheet-panel" role="tabpanel" aria-labelledby="tab-rituais" hidden>
+                <div class="section-heading"><span class="eyebrow">CONHECIMENTO PARANORMAL</span><h2>Rituais</h2></div>
+                <div class="stat-grid stat-grid--single"><div><span>DT de rituais</span><strong id="ritualDifficulty">—</strong></div></div>
+                <div class="section-actions"><p>Registre os rituais conhecidos. A DT será definida com as regras dessa etapa.</p><button type="button" class="button button--primary" data-add-entry="rituais">+ Adicionar ritual</button></div>
+                <div id="ritualsList" class="entry-list entry-list--accordion"></div>
+            </section>
+            <p id="storageNote" class="storage-note" role="status">Esta ficha está salva neste navegador.</p>
+        </div>
+    </main>
+
+    <div id="skillRollResult" class="skill-roll-result" role="status" aria-live="polite" hidden></div>
+
+    <dialog id="entryDialog" class="entry-dialog" aria-labelledby="entryDialogTitle">
+        <form id="entryForm">
+            <h2 id="entryDialogTitle"></h2>
+            <label>Nome<input id="entryName" name="name" maxlength="100" required></label>
+            <label id="entryCategoryField" hidden>Categoria
+                <select id="entryCategory" name="category">
+                    <option value="itens">Itens</option><option value="armas">Armas</option><option value="protecao">Proteção</option><option value="geral">Geral</option><option value="amaldicoados">Itens amaldiçoados</option>
+                </select>
+            </label>
+            <label>Descrição<textarea id="entryDescription" name="description" rows="4" maxlength="2000" placeholder="Detalhes para lembrar durante o jogo"></textarea></label>
+            <div class="entry-dialog__actions"><button id="cancelEntry" type="button" class="button button--ghost">Cancelar</button><button type="submit" class="button button--primary">Adicionar</button></div>
+        </form>
+    </dialog>
+    <script src="attribute-themes.js?v=20260922-attribute-themes-final"></script>
+    <script src="nex-rules.js?v=20260927-nex-resources"></script>
+    <script src="origins.js?v=20260924-origin-training"></script>
+    <script src="personagem.js?v=20260927-nex-resources"></script>
+</body>
+</html>

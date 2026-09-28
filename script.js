@@ -4,8 +4,12 @@ const $ = (id) => document.getElementById(id);
 const canvas = $("gameCanvas");
 const ctx = canvas.getContext("2d");
 
-const panels = { grid: $("gridPanel"), tokens: $("tokenPanel"), session: $("sessionPanel") };
-const panelButtons = { grid: $("toolMap"), tokens: $("toolToken"), session: $("toolSession") };
+const panels = { grid: $("gridPanel"), tokens: $("tokenPanel"), session: $("sessionPanel"), view: $("playerViewPanel") };
+const panelButtons = { grid: $("toolMap"), tokens: $("toolToken"), session: $("toolSession"), view: $("toolPlayerView") };
+const VIEW_RULES = window.REAL_TABLETOP_VIEW;
+const previewDialog = $("playerPreview");
+const previewCanvas = $("playerPreviewCanvas");
+const previewCtx = previewCanvas.getContext("2d");
 
 const THEME = { background: "#070509", grid: "#cd263d", accent: "#fb3b53", accentSoft: "#fecdd3" };
 const DEFAULT_GRID = { visible: false, size: 50, opacity: 0.32, offsetX: 0, offsetY: 0, metersPerSquare: 3 };
@@ -20,6 +24,7 @@ const ROTATION_HANDLE_RADIUS = 17;
 const ROTATION_HANDLE_GAP = 28;
 
 const camera = { x: 0, y: 0, zoom: 1 };
+const playerView = VIEW_RULES.normalize();
 const gridSettings = { ...DEFAULT_GRID };
 const mapState = {
     image: new Image(), loaded: false, source: null,
@@ -47,6 +52,7 @@ function requestRender() {
     requestAnimationFrame(() => {
         renderFrameRequested = false;
         draw();
+        if (previewDialog.open) drawPlayerPreview();
     });
 }
 
@@ -120,6 +126,7 @@ async function createToken(source, name, options = {}) {
             rotation: options.rotation ?? 0,
             type,
             color: options.color || TYPE_COLORS[type],
+            visibleToPlayers: options.visibleToPlayers !== false,
             hp: options.hp ?? 10,
             maxHp: options.maxHp ?? 10,
             condition: options.condition || "",
@@ -163,6 +170,7 @@ Object.entries(panelButtons).forEach(([name, button]) => {
 $("closeGridPanel").addEventListener("click", () => closePanels());
 $("closeTokenPanel").addEventListener("click", () => closePanels());
 $("closeSessionPanel").addEventListener("click", () => closePanels());
+$("closePlayerViewPanel").addEventListener("click", () => closePanels());
 $("startMapImport").addEventListener("click", () => closePanels("grid"));
 $("startTokenImport").addEventListener("click", () => closePanels("tokens"));
 
@@ -286,7 +294,7 @@ function updateTokenLibrary() {
         const name = document.createElement("strong");
         const details = document.createElement("small");
         name.textContent = token.name;
-        details.textContent = token.hp + "/" + token.maxHp + " PV · " + Math.round(token.width) + " px";
+        details.textContent = token.hp + "/" + token.maxHp + " PV · " + Math.round(token.width) + " px" + (token.visibleToPlayers ? "" : " · só mestre");
         information.append(name, details);
         const identifier = document.createElement("small");
         identifier.textContent = "#" + token.id;
@@ -309,6 +317,7 @@ function updateTokenInspector() {
     $("tokenHpInput").value = selectedToken.hp;
     $("tokenMaxHpInput").value = selectedToken.maxHp;
     $("tokenConditionInput").value = selectedToken.condition;
+    $("tokenVisibleToPlayersInput").checked = selectedToken.visibleToPlayers;
     $("tokenShowNameInput").checked = selectedToken.showName;
     $("tokenShowHealthInput").checked = selectedToken.showHealth;
     const index = tokens.indexOf(selectedToken);
@@ -324,6 +333,7 @@ function updateSelectedTokenFromInspector() {
     selectedToken.maxHp = Math.max(1, Number($("tokenMaxHpInput").value) || 1);
     selectedToken.hp = Math.max(0, Math.min(selectedToken.maxHp, Number($("tokenHpInput").value) || 0));
     selectedToken.condition = $("tokenConditionInput").value.trim();
+    selectedToken.visibleToPlayers = $("tokenVisibleToPlayersInput").checked;
     selectedToken.showName = $("tokenShowNameInput").checked;
     selectedToken.showHealth = $("tokenShowHealthInput").checked;
     $("tokenHpInput").value = selectedToken.hp;
@@ -334,7 +344,7 @@ function updateSelectedTokenFromInspector() {
 ["tokenNameInput", "tokenColorInput", "tokenHpInput", "tokenMaxHpInput", "tokenConditionInput"]
     .forEach((id) => $(id).addEventListener("input", updateSelectedTokenFromInspector));
 
-["tokenShowNameInput", "tokenShowHealthInput"]
+["tokenVisibleToPlayersInput", "tokenShowNameInput", "tokenShowHealthInput"]
     .forEach((id) => $(id).addEventListener("change", updateSelectedTokenFromInspector));
 
 $("tokenTypeInput").addEventListener("change", () => {
@@ -366,6 +376,7 @@ function duplicateSelectedToken() {
         type: selectedToken.type, color: selectedToken.color,
         hp: selectedToken.hp, maxHp: selectedToken.maxHp,
         condition: selectedToken.condition,
+        visibleToPlayers: selectedToken.visibleToPlayers,
         showName: selectedToken.showName,
         showHealth: selectedToken.showHealth
     });
@@ -487,7 +498,8 @@ function getResizeWidth(token, x, y) {
 function setMode(mode) {
     activeMode = mode;
     updateRulerUI();
-    canvas.style.cursor = mode === "ruler" ? "crosshair" : "default";
+    updatePlayerViewUI();
+    canvas.style.cursor = mode === "ruler" || mode === "player-view" ? "crosshair" : "default";
 }
 
 function toggleHud() {
@@ -556,6 +568,47 @@ $("toolZoom").addEventListener("click", () => {
     requestRender(); scheduleSave();
 });
 
+function updatePlayerViewUI() {
+    const moving = activeMode === "player-view";
+    $("movePlayerView").setAttribute("aria-pressed", String(moving));
+    $("toolPlayerView").setAttribute("aria-pressed", String(moving));
+    $("movePlayerView").textContent = moving ? "Movendo retângulo · clique para sair" : "Mover retângulo no mapa";
+    $("playerViewWidth").value = String(playerView.width);
+    $("playerViewSize").value = String(playerView.width);
+}
+
+$("movePlayerView").addEventListener("click", () => {
+    closePanels();
+    setMode(activeMode === "player-view" ? "select" : "player-view");
+});
+$("alignPlayerView").addEventListener("click", () => {
+    playerView.x = -camera.x - playerView.width / 2;
+    playerView.y = -camera.y - playerView.height / 2;
+    requestRender(); scheduleSave();
+});
+$("playerViewWidth").addEventListener("input", () => {
+    const width = Number($("playerViewWidth").value);
+    const centerX = playerView.x + playerView.width / 2;
+    const centerY = playerView.y + playerView.height / 2;
+    playerView.width = width;
+    playerView.height = width / VIEW_RULES.ASPECT_RATIO;
+    playerView.x = centerX - playerView.width / 2;
+    playerView.y = centerY - playerView.height / 2;
+    updatePlayerViewUI(); requestRender(); scheduleSave();
+});
+document.querySelectorAll("[data-player-dx], [data-player-dy]").forEach((button) => {
+    button.addEventListener("click", () => {
+        playerView.x += Number(button.dataset.playerDx || 0);
+        playerView.y += Number(button.dataset.playerDy || 0);
+        requestRender(); scheduleSave();
+    });
+});
+$("openPlayerPreview").addEventListener("click", () => {
+    previewDialog.showModal();
+    drawPlayerPreview();
+});
+$("closePlayerPreview").addEventListener("click", () => previewDialog.close());
+
 // Interação com o canvas
 canvas.addEventListener("mousedown", (event) => {
     const point = screenToWorld(event.clientX, event.clientY);
@@ -570,6 +623,17 @@ canvas.addEventListener("mousedown", (event) => {
         measurement.start = snapMeasurementPoint(point);
         measurement.end = measurement.start;
         updateRulerUI();
+        requestRender();
+        return;
+    }
+    if (activeMode === "player-view") {
+        const inside = VIEW_RULES.contains(playerView, point);
+        interaction.type = "player-view";
+        interaction.offsetX = inside ? point.x - playerView.x : playerView.width / 2;
+        interaction.offsetY = inside ? point.y - playerView.y : playerView.height / 2;
+        playerView.x = point.x - interaction.offsetX;
+        playerView.y = point.y - interaction.offsetY;
+        canvas.style.cursor = "grabbing";
         requestRender();
         return;
     }
@@ -617,6 +681,11 @@ canvas.addEventListener("mousemove", (event) => {
         interaction.lastY = event.clientY;
         requestRender(); return;
     }
+    if (interaction.type === "player-view") {
+        playerView.x = point.x - interaction.offsetX;
+        playerView.y = point.y - interaction.offsetY;
+        requestRender(); return;
+    }
     const token = interaction.token;
     if (interaction.type === "drag" && token) {
         token.x = point.x - interaction.offsetX;
@@ -635,7 +704,7 @@ canvas.addEventListener("mousemove", (event) => {
         requestRender(); return;
     }
     if (!hudVisible) canvas.style.cursor = getTopmostTokenAt(point) ? "grab" : "default";
-    else if (activeMode === "ruler") canvas.style.cursor = "crosshair";
+    else if (activeMode === "ruler" || activeMode === "player-view") canvas.style.cursor = "crosshair";
     else if (selectedToken) {
         const controls = getTokenControls(selectedToken);
         if (isInsideControl(event.clientX, event.clientY, controls.resize)) canvas.style.cursor = "nesw-resize";
@@ -652,14 +721,14 @@ canvas.addEventListener("mouseup", (event) => {
         interaction.token.x = Math.round((interaction.token.x - gridSettings.offsetX) / gridSettings.size) * gridSettings.size + gridSettings.offsetX;
         interaction.token.y = Math.round((interaction.token.y - gridSettings.offsetY) / gridSettings.size) * gridSettings.size + gridSettings.offsetY;
     }
-    if (interaction.type && interaction.type !== "pan") {
+    if (interaction.type && interaction.type !== "pan" && interaction.type !== "player-view") {
         updateTokenLibrary(); updateTokenInspector(); scheduleSave();
     }
     if (interaction.type === "pan") scheduleSave();
     if (event.button === 2 || event.button === 0) {
         interaction.type = null;
         interaction.token = null;
-        canvas.style.cursor = activeMode === "ruler" ? "crosshair" : "default";
+        canvas.style.cursor = activeMode === "ruler" || activeMode === "player-view" ? "crosshair" : "default";
     }
 });
 
@@ -668,7 +737,7 @@ canvas.addEventListener("mouseleave", () => {
     interaction.type = null;
     interaction.token = null;
     measurement.drawing = false;
-    canvas.style.cursor = activeMode === "ruler" ? "crosshair" : "default";
+    canvas.style.cursor = activeMode === "ruler" || activeMode === "player-view" ? "crosshair" : "default";
 });
 canvas.addEventListener("contextmenu", (event) => event.preventDefault());
 canvas.addEventListener("wheel", (event) => {
@@ -732,12 +801,14 @@ function serializeSession() {
         version: 1,
         savedAt: new Date().toISOString(),
         camera: { ...camera },
+        playerView: { ...playerView },
         grid: { ...gridSettings },
         map: { source: mapState.source, name: mapState.name, x: mapState.x, y: mapState.y, scale: mapState.scale },
         tokens: tokens.map((token) => ({
             id: token.id, name: token.name, source: token.source,
             x: token.x, y: token.y, width: token.width, rotation: token.rotation,
             type: token.type, color: token.color, hp: token.hp,
+            visibleToPlayers: token.visibleToPlayers,
             maxHp: token.maxHp, condition: token.condition,
             showName: token.showName, showHealth: token.showHealth
         })),
@@ -764,12 +835,14 @@ function scheduleSave() {
     clearTimeout(saveTimer);
     $("saveStatus").textContent = "Salvando…";
     saveTimer = setTimeout(() => saveSession(), 300);
+    window.dispatchEvent(new Event("real:tabletop-changed"));
 }
 
 async function applySession(data) {
     if (!data) return false;
     Object.assign(measurement, { drawing: false, start: null, end: null });
     Object.assign(camera, { x: 0, y: 0, zoom: 1 }, data.camera || {});
+    Object.assign(playerView, VIEW_RULES.normalize(data.playerView));
     Object.assign(gridSettings, DEFAULT_GRID, data.grid || {});
     if (isImportedImage(data.map?.source)) {
         Object.assign(mapState, {
@@ -786,7 +859,7 @@ async function applySession(data) {
         await createToken(savedToken.source, savedToken.name, { ...savedToken, select: false, save: false });
     }
     selectedToken = tokens.find((token) => token.id === data.selectedTokenId) || null;
-    updateMapUI(); updateGridUI(); updateTokenLibrary(); updateTokenInspector(); updateRulerUI(); requestRender();
+    updateMapUI(); updateGridUI(); updateTokenLibrary(); updateTokenInspector(); updateRulerUI(); updatePlayerViewUI(); requestRender();
     return true;
 }
 
@@ -808,10 +881,11 @@ async function createNewSession() {
     selectedToken = null;
     nextTokenId = 1;
     Object.assign(camera, { x: 0, y: 0, zoom: 1 });
+    Object.assign(playerView, VIEW_RULES.normalize());
     Object.assign(gridSettings, DEFAULT_GRID);
     Object.assign(measurement, { drawing: false, start: null, end: null });
     clearMap(false);
-    updateTokenLibrary(); updateTokenInspector(); updateRulerUI();
+    updateTokenLibrary(); updateTokenInspector(); updateRulerUI(); updatePlayerViewUI();
     await saveSession("Nova mesa criada");
 }
 
@@ -1000,6 +1074,91 @@ function drawCornerMarks() {
     ctx.stroke(); ctx.restore();
 }
 
+function drawPlayerFrame() {
+    const topLeft = worldToScreen(playerView);
+    const width = playerView.width * camera.zoom;
+    const height = playerView.height * camera.zoom;
+    ctx.save();
+    ctx.strokeStyle = "#f4d7a1";
+    ctx.fillStyle = "rgba(244, 215, 161, .055)";
+    ctx.lineWidth = 2;
+    ctx.setLineDash([10, 6]);
+    ctx.fillRect(topLeft.x, topLeft.y, width, height);
+    ctx.strokeRect(topLeft.x, topLeft.y, width, height);
+    ctx.setLineDash([]);
+    const label = "ÁREA DOS JOGADORES";
+    ctx.font = "700 11px Segoe UI, Arial";
+    const labelWidth = ctx.measureText(label).width + 18;
+    const labelX = Math.max(0, Math.min(window.innerWidth - labelWidth, topLeft.x));
+    const labelY = Math.max(0, Math.min(window.innerHeight - 24, topLeft.y - 24));
+    ctx.fillStyle = "#241b1b";
+    ctx.fillRect(labelX, labelY, labelWidth, 24);
+    ctx.fillStyle = "#f4d7a1";
+    ctx.fillText(label, labelX + 9, labelY + 16);
+    ctx.restore();
+}
+
+function drawPlayerPreview() {
+    const width = previewCanvas.width;
+    const height = previewCanvas.height;
+    const scale = width / playerView.width;
+    previewCtx.setTransform(1, 0, 0, 1, 0, 0);
+    previewCtx.fillStyle = THEME.background;
+    previewCtx.fillRect(0, 0, width, height);
+    previewCtx.save();
+    previewCtx.setTransform(scale, 0, 0, scale, -playerView.x * scale, -playerView.y * scale);
+    if (mapState.loaded) {
+        const mapWidth = mapState.image.width * mapState.scale;
+        const mapHeight = mapState.image.height * mapState.scale;
+        previewCtx.drawImage(mapState.image, mapState.x - mapWidth / 2, mapState.y - mapHeight / 2, mapWidth, mapHeight);
+    }
+    if (gridSettings.visible && gridSettings.size > 0 && playerView.width / gridSettings.size < 300) {
+        const size = gridSettings.size;
+        const startX = Math.ceil((playerView.x - gridSettings.offsetX) / size) * size + gridSettings.offsetX;
+        const startY = Math.ceil((playerView.y - gridSettings.offsetY) / size) * size + gridSettings.offsetY;
+        previewCtx.beginPath();
+        for (let x = startX; x <= playerView.x + playerView.width; x += size) {
+            previewCtx.moveTo(x, playerView.y); previewCtx.lineTo(x, playerView.y + playerView.height);
+        }
+        for (let y = startY; y <= playerView.y + playerView.height; y += size) {
+            previewCtx.moveTo(playerView.x, y); previewCtx.lineTo(playerView.x + playerView.width, y);
+        }
+        previewCtx.strokeStyle = `rgba(205, 38, 61, ${gridSettings.opacity})`;
+        previewCtx.lineWidth = 1 / scale;
+        previewCtx.stroke();
+    }
+    VIEW_RULES.publishedTokens(tokens).forEach((token) => {
+        if (!token.loaded) return;
+        const tokenHeight = getTokenHeight(token);
+        previewCtx.save();
+        previewCtx.translate(token.x, token.y);
+        previewCtx.rotate(token.rotation);
+        previewCtx.drawImage(token.image, -token.width / 2, -tokenHeight / 2, token.width, tokenHeight);
+        previewCtx.restore();
+        if (token.showName || token.showHealth) {
+            let labelY = token.y + tokenHeight / 2 + 12 / scale;
+            if (token.showName) {
+                previewCtx.textAlign = "center";
+                previewCtx.font = `600 ${12 / scale}px Segoe UI, Arial`;
+                previewCtx.lineWidth = 3 / scale;
+                previewCtx.strokeStyle = "#070509";
+                previewCtx.strokeText(token.name, token.x, labelY);
+                previewCtx.fillStyle = "#fff1f3";
+                previewCtx.fillText(token.name, token.x, labelY);
+                labelY += 7 / scale;
+            }
+            if (token.showHealth) {
+                const barWidth = Math.max(60 / scale, token.width);
+                previewCtx.fillStyle = "#070509";
+                previewCtx.fillRect(token.x - barWidth / 2, labelY, barWidth, 5 / scale);
+                previewCtx.fillStyle = token.color;
+                previewCtx.fillRect(token.x - barWidth / 2, labelY, barWidth * Math.max(0, Math.min(1, token.hp / token.maxHp)), 5 / scale);
+            }
+        }
+    });
+    previewCtx.restore();
+}
+
 function draw() {
     ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
     ctx.fillStyle = THEME.background;
@@ -1009,7 +1168,7 @@ function draw() {
     tokens.forEach(drawToken);
     if (hudVisible) {
         drawTokenSelection(); drawTokenControls(); drawMeasurement();
-        drawCornerMarks(); drawOverlay();
+        drawPlayerFrame(); drawCornerMarks(); drawOverlay();
     }
 }
 
@@ -1028,4 +1187,16 @@ async function initialize() {
     requestRender();
 }
 
-initialize();
+const tabletopReady = initialize();
+window.REAL_TABLETOP_MASTER = Object.freeze({
+    ready: tabletopReady,
+    campaignKey: campaignId || "autosave",
+    capturePlayerFrame() {
+        drawPlayerPreview();
+        const published = document.createElement("canvas");
+        published.width = 800;
+        published.height = 450;
+        published.getContext("2d").drawImage(previewCanvas, 0, 0, published.width, published.height);
+        return published.toDataURL("image/jpeg", 0.68);
+    }
+});
