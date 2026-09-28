@@ -1103,6 +1103,7 @@ function drawPlayerPreview() {
     const width = previewCanvas.width;
     const height = previewCanvas.height;
     const scale = width / playerView.width;
+    const detailScale = width / 960;
     previewCtx.setTransform(1, 0, 0, 1, 0, 0);
     previewCtx.fillStyle = THEME.background;
     previewCtx.fillRect(0, 0, width, height);
@@ -1125,7 +1126,7 @@ function drawPlayerPreview() {
             previewCtx.moveTo(playerView.x, y); previewCtx.lineTo(playerView.x + playerView.width, y);
         }
         previewCtx.strokeStyle = `rgba(205, 38, 61, ${gridSettings.opacity})`;
-        previewCtx.lineWidth = 1 / scale;
+        previewCtx.lineWidth = detailScale / scale;
         previewCtx.stroke();
     }
     VIEW_RULES.publishedTokens(tokens).forEach((token) => {
@@ -1137,23 +1138,23 @@ function drawPlayerPreview() {
         previewCtx.drawImage(token.image, -token.width / 2, -tokenHeight / 2, token.width, tokenHeight);
         previewCtx.restore();
         if (token.showName || token.showHealth) {
-            let labelY = token.y + tokenHeight / 2 + 12 / scale;
+            let labelY = token.y + tokenHeight / 2 + 12 * detailScale / scale;
             if (token.showName) {
                 previewCtx.textAlign = "center";
-                previewCtx.font = `600 ${12 / scale}px Segoe UI, Arial`;
-                previewCtx.lineWidth = 3 / scale;
+                previewCtx.font = `600 ${12 * detailScale / scale}px Segoe UI, Arial`;
+                previewCtx.lineWidth = 3 * detailScale / scale;
                 previewCtx.strokeStyle = "#070509";
                 previewCtx.strokeText(token.name, token.x, labelY);
                 previewCtx.fillStyle = "#fff1f3";
                 previewCtx.fillText(token.name, token.x, labelY);
-                labelY += 7 / scale;
+                labelY += 7 * detailScale / scale;
             }
             if (token.showHealth) {
-                const barWidth = Math.max(60 / scale, token.width);
+                const barWidth = Math.max(60 * detailScale / scale, token.width);
                 previewCtx.fillStyle = "#070509";
-                previewCtx.fillRect(token.x - barWidth / 2, labelY, barWidth, 5 / scale);
+                previewCtx.fillRect(token.x - barWidth / 2, labelY, barWidth, 5 * detailScale / scale);
                 previewCtx.fillStyle = token.color;
-                previewCtx.fillRect(token.x - barWidth / 2, labelY, barWidth * Math.max(0, Math.min(1, token.hp / token.maxHp)), 5 / scale);
+                previewCtx.fillRect(token.x - barWidth / 2, labelY, barWidth * Math.max(0, Math.min(1, token.hp / token.maxHp)), 5 * detailScale / scale);
             }
         }
     });
@@ -1197,6 +1198,9 @@ window.REAL_TABLETOP_MASTER = Object.freeze({
         if (typeof previewCanvas.captureStream !== "function") return null;
         drawPlayerPreview();
         playerStream = previewCanvas.captureStream(24);
+        playerStream.getVideoTracks().forEach((track) => {
+            if ("contentHint" in track) track.contentHint = "detail";
+        });
         return playerStream;
     },
     stopPlayerStream() {

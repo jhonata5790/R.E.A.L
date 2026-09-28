@@ -24,4 +24,5 @@ assert.match(script, /VIEW_RULES\.publishedTokens\(tokens\)/);
 assert.match(script, /visibleToPlayers: token\.visibleToPlayers/);
 assert.match(script, /visibleToPlayers: selectedToken\.visibleToPlayers/);
 assert.match(script, /if \(previewDialog\.open \|\| playerStream\) drawPlayerPreview\(\)/);
+assert.match(script, /const detailScale = width \/ 960/);
 console.log("Tabletop: visão independente, filtro de tokens e persistência da área: OK");
