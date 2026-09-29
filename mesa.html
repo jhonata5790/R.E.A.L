@@ -9,14 +9,16 @@
 
     <title>Mesa tática | R.E.A.L</title>
 
-    <link rel="stylesheet" href="style.css?v=20260928-online-tabletop">
+    <link rel="stylesheet" href="style.css?v=20260928-hud-menu">
+    <link rel="stylesheet" href="visitor-name.css?v=20260928-visitor">
+    <script src="visitor-name.js?v=20260928-visitor"></script>
 </head>
 
-<body>
+<body class="tabletop-page">
 
     <main id="tabletop">
 
-        <canvas id="gameCanvas"></canvas>
+        <canvas id="gameCanvas" tabindex="0" aria-label="Mapa da mesa"></canvas>
 
         <div id="emptyTabletop" class="empty-tabletop">
             <span class="empty-tabletop__mark" aria-hidden="true">✦</span>
@@ -28,7 +30,43 @@
             </div>
         </div>
 
-        <a class="campaign-return" href="index.html" aria-label="Voltar ao painel da campanha">← Campanha</a>
+        <button id="openHudMenu" class="hud-menu-trigger" type="button" aria-label="Abrir menu da mesa" aria-haspopup="dialog" aria-controls="hudMenu" aria-expanded="false">
+            <span aria-hidden="true"></span><span aria-hidden="true"></span><span aria-hidden="true"></span>
+        </button>
+        <button id="openViewerPeek" class="viewer-peek-trigger" type="button" aria-label="Mostrar espectadores" aria-controls="viewerPeek" aria-expanded="false">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.5"></circle><path d="M5 20v-1.5a7 7 0 0 1 14 0V20Z"></path></svg>
+            <span id="mobileViewerCount">0</span>
+        </button>
+        <section id="viewerPeek" class="viewer-peek" aria-labelledby="viewerPeekTitle" hidden>
+            <div class="viewer-peek__heading"><h2 id="viewerPeekTitle">Assistindo à mesa</h2><button id="closeViewerPeek" type="button" aria-label="Fechar lista de espectadores">×</button></div>
+            <p class="viewer-peek__count">Espectadores <span id="onlineViewerCount" role="status" aria-live="polite">(0)</span></p>
+            <ul id="onlineViewerList"><li>Ninguém está assistindo.</li></ul>
+        </section>
+
+        <dialog id="hudMenu" class="hud-menu" aria-labelledby="hudCampaignName">
+            <div class="hud-menu__shell">
+                <header class="hud-menu__header">
+                    <div><span>R.E.A.L · CAMPANHA</span><h2 id="hudCampaignName">Mesa</h2></div>
+                    <button id="closeHudMenu" type="button" aria-label="Fechar menu da mesa">×</button>
+                </header>
+                <nav class="hud-menu__nav" aria-label="Seções da mesa">
+                    <button type="button" data-hud-section="shield" aria-controls="hudShield" aria-expanded="false">Escudo do mestre <span aria-hidden="true">›</span></button>
+                    <button type="button" data-hud-section="documents" aria-controls="hudDocuments" aria-expanded="false">Documentos <span aria-hidden="true">›</span></button>
+                </nav>
+                <section id="hudShield" class="hud-menu__section" aria-label="Escudo do mestre" hidden>
+                    <h3>Fichas da campanha</h3>
+                    <ul id="hudCharacterList"></ul>
+                    <p id="hudCharacterEmpty" hidden>Nenhuma ficha vinculada a esta campanha.</p>
+                </section>
+                <section id="hudDocuments" class="hud-menu__section" aria-label="Documentos da campanha" hidden>
+                    <h3>Anotações da campanha</h3>
+                    <p id="hudCampaignNotes"></p>
+                    <p class="hud-menu__hint">A biblioteca de documentos ainda será construída. As anotações atuais continuam na campanha.</p>
+                    <a id="hudCampaignLink" href="index.html#campanhas">Abrir campanha</a>
+                </section>
+                <footer class="hud-menu__footer"><a class="campaign-return" href="index.html">Sair da mesa</a></footer>
+            </div>
+        </dialog>
 
         <div id="rulerControls" class="ruler-controls" hidden>
             <span id="modeBadge">Régua ativa · arraste entre dois pontos</span>
@@ -404,6 +442,12 @@
             <p>Somente a área do retângulo e os tokens publicados aparecem aqui. Na mesa online, esta é a visão enviada aos jogadores.</p>
         </dialog>
 
+        <div id="toolDock" class="tool-dock">
+            <button id="toggleToolDock" class="tool-dock__handle" type="button" aria-controls="toolbar" aria-expanded="true" aria-label="Recolher ferramentas da mesa">
+                <span class="tool-dock__grip" aria-hidden="true"></span>
+                <span>Ferramentas</span>
+                <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 12 5-5 5 5"></path></svg>
+            </button>
         <nav
             id="toolbar"
             aria-label="Ferramentas da mesa"
@@ -510,14 +554,16 @@
             </button>
 
         </nav>
+        </div>
 
     </main>
 
     <script src="tabletop-view.js?v=20260927-player-view"></script>
-    <script src="script.js?v=20260928-full-hd"></script>
+    <script src="script.js?v=20260928-tool-dock"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.3/dist/umd/supabase.js"></script>
     <script src="supabase-config.js?v=20260928-online-tabletop"></script>
-    <script src="tabletop-online.js?v=20260928-full-hd"></script>
+    <script src="tabletop-online.js?v=20260928-hud-menu"></script>
+    <script src="tabletop-hud.js?v=20260928-hud-menu"></script>
 
 </body>
 </html>

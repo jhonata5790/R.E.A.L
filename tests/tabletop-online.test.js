@@ -16,6 +16,8 @@ const configCode = read("supabase-config.js");
 assert.match(masterHtml, /id="onlineAuthForm"/);
 assert.match(masterHtml, /id="onlineToggle"/);
 assert.match(masterHtml, /id="onlineInvite"/);
+assert.match(masterHtml, /id="onlineViewerList"/);
+assert.match(masterHtml, /id="mobileViewerCount"/);
 assert.match(masterHtml, /id="playerPreviewCanvas" width="1920" height="1080"/);
 assert.match(masterCode, /auth\.signInWithPassword/);
 assert.match(masterCode, /auth\.signUp/);
@@ -35,6 +37,8 @@ assert.match(tabletopCode, /window\.dispatchEvent\(new Event\("real:tabletop-cha
 assert.match(guestHtml, /id="guestFrame"/);
 assert.match(guestHtml, /id="guestVideo"/);
 assert.match(guestCode, /kind: "answer"/);
+assert.match(guestCode, /channel\.track\(\{ role: "viewer", name \}\)/);
+assert.match(masterCode, /\.on\("presence", \{ event: "sync" \}, showViewers\)/);
 assert.doesNotMatch(guestHtml, /id="(?:gameCanvas|toolToken|toolMap|tokenLibrary)"/);
 assert.match(edgeCode, /select", "is_live,published_frame,published_at"/);
 assert.doesNotMatch(edgeCode, /select", "\*"/);
@@ -42,7 +46,7 @@ assert.match(edgeCode, /SUPABASE_SECRET_KEYS/);
 assert.match(configCode, /sb_publishable_/);
 assert.doesNotMatch(configCode, /sb_secret_|SERVICE_ROLE/i);
 
-async function runGuest(hash, response) {
+async function runGuest(hash, response, visitorName) {
     const ids = {
         guestStatus: { textContent: "" },
         guestFrame: { hidden: true, src: "", removeAttribute(name) { if (name === "src") this.src = ""; } },
@@ -53,7 +57,9 @@ async function runGuest(hash, response) {
     const context = {
         document: { visibilityState: "visible", getElementById: (id) => ids[id], addEventListener() {} },
         location: { hash },
-        window: { REAL_SUPABASE_CONFIG: { url: "https://example.supabase.co", publishableKey: "sb_publishable_test" }, addEventListener() {} },
+        window: { REAL_SUPABASE_CONFIG: { url: "https://example.supabase.co", publishableKey: "sb_publishable_test" },
+            REAL_VISITOR_NAME: visitorName === undefined ? undefined : { getName: () => visitorName, ready: new Promise(() => {}) },
+            addEventListener() {} },
         crypto: { randomUUID: () => "11111111-2222-4333-8444-555555555555" },
         URLSearchParams,
         setInterval() {},
@@ -69,8 +75,9 @@ async function runMaster() {
     const ids = Object.fromEntries([
         "onlineStatus", "onlineAuthForm", "onlineMasterControls", "onlineToggle", "onlineInvite",
         "onlineCopy", "onlineMasterName", "onlineEmail", "onlinePassword", "onlineSignIn",
-        "onlineSignUp", "onlineSignOut"
+        "onlineSignUp", "onlineSignOut", "onlineViewerCount", "onlineViewerList", "mobileViewerCount"
     ].map((id) => [id, { hidden: false, disabled: false, value: "", textContent: "",
+        children: [], replaceChildren() { this.children = []; }, appendChild(child) { this.children.push(child); },
         addEventListener(name, fn) { handlers[`${id}:${name}`] = fn; }, reportValidity() { return true; } }]));
     const user = { id: "master-1", email: "mestre@example.test" };
     const writes = [];
@@ -86,12 +93,12 @@ async function runMaster() {
                 single: async () => ({ data: savedRoom, error: null })
             };
         },
-        channel() { return { on() { return this; }, subscribe() { return this; }, send: async () => {} }; },
+        channel() { return { on() { return this; }, subscribe() { return this; }, presenceState: () => ({}), send: async () => {} }; },
         removeChannel() {},
         auth: { onAuthStateChange() {}, getUser: async () => ({ data: { user } }) }
     };
     const context = {
-        document: { getElementById: (id) => ids[id] },
+        document: { getElementById: (id) => ids[id], createElement: () => ({ textContent: "" }) },
         window: { REAL_SUPABASE_CONFIG: { url: "https://example.supabase.co", publishableKey: "sb_publishable_test" },
             REAL_TABLETOP_MASTER: { ready: Promise.resolve(), campaignKey: "autosave", capturePlayerFrame: () => "data:image/jpeg;base64,abc" },
             supabase: { createClient: () => client }, addEventListener(name, fn) { handlers[`window:${name}`] = fn; } },
@@ -104,6 +111,7 @@ async function runMaster() {
     await handlers["onlineToggle:click"]();
     assert.equal(writes[0].kind, "insert");
     assert.equal(writes[0].data.owner_id, user.id);
+    assert.equal(Object.hasOwn(writes[0].data, "name"), false);
     assert.equal(writes[0].data.published_frame, "data:image/jpeg;base64,abc");
     assert.equal(ids.onlineCopy.disabled, false);
     assert.match(ids.onlineInvite.value, /mesa-jogador\.html#convite=/);
@@ -131,9 +139,14 @@ async function runLive() {
     const masterIds = Object.fromEntries([
         "onlineStatus", "onlineAuthForm", "onlineMasterControls", "onlineToggle", "onlineInvite",
         "onlineCopy", "onlineMasterName", "onlineEmail", "onlinePassword", "onlineSignIn",
-        "onlineSignUp", "onlineSignOut"
+        "onlineSignUp", "onlineSignOut", "onlineViewerCount", "onlineViewerList", "mobileViewerCount"
     ].map((id) => [id, { hidden: false, disabled: false, value: "", textContent: "", addEventListener() {} }]));
+    masterIds.onlineViewerList.children = [];
+    masterIds.onlineViewerList.replaceChildren = function () { this.children = []; };
+    masterIds.onlineViewerList.appendChild = function (child) { this.children.push(child); };
     const handlers = {};
+    const guestEvents = {};
+    let visitorName = "Jhonata";
     masterIds.onlineToggle.addEventListener = (name, fn) => { handlers[name] = fn; };
 
     class FakePeerConnection {
@@ -155,12 +168,15 @@ async function runLive() {
                 const handlers = {};
                 const channel = {
                     topic, handlers,
-                    on(type, filter, fn) { assert.equal(type, "broadcast"); handlers[filter.event] = fn; return this; },
+                    on(type, filter, fn) { handlers[`${type}:${filter.event}`] = fn; return this; },
+                    presenceState() { return Object.fromEntries(channels.filter((other) => other.topic === topic && other.presence).map((other) => [other.presenceKey, [other.presence]])); },
+                    async track(value) { this.presence = value; this.presenceKey = `${channels.indexOf(this)}`; channels.filter((other) => other.topic === topic).forEach((other) => other.handlers["presence:sync"]?.()); },
+                    async untrack() { this.presence = null; channels.filter((other) => other.topic === topic).forEach((other) => other.handlers["presence:sync"]?.()); },
                     subscribe(fn) { channels.push(this); fn?.("SUBSCRIBED"); return this; },
                     async send(message) {
                         signals.push(message);
                         channels.filter((other) => other !== this && other.topic === topic).forEach((other) => {
-                            queueMicrotask(() => other.handlers[message.event]?.({ payload: message.payload }));
+                            queueMicrotask(() => other.handlers[`broadcast:${message.event}`]?.({ payload: message.payload }));
                         });
                     }
                 };
@@ -190,7 +206,7 @@ async function runLive() {
     };
     const masterContext = {
         ...shared,
-        document: { getElementById: (id) => masterIds[id] },
+        document: { getElementById: (id) => masterIds[id], createElement: () => ({ textContent: "" }) },
         window: { REAL_SUPABASE_CONFIG: { url: "https://example.supabase.co", publishableKey: "sb_publishable_test" },
             REAL_TABLETOP_MASTER: { ready: Promise.resolve(), campaignKey: "autosave", startPlayerStream: () => stream,
                 stopPlayerStream: () => track.stop(), capturePlayerFrame: () => "data:image/jpeg;base64,abc" },
@@ -204,13 +220,21 @@ async function runLive() {
         ...shared,
         document: { visibilityState: "visible", getElementById: (id) => guestIds[id], addEventListener() {} },
         window: { REAL_SUPABASE_CONFIG: { url: "https://example.supabase.co", publishableKey: "sb_publishable_test" },
-            supabase: { createClient }, addEventListener() {} },
+            REAL_VISITOR_NAME: { getName: () => visitorName, ready: Promise.resolve("Jhonata") },
+            supabase: { createClient }, addEventListener(name, fn) { guestEvents[name] = fn; } },
         location: { hash: `#convite=${code}` },
         fetch: async () => ({ ok: true, status: 200, json: async () => ({ live: room.is_live,
             frame: room.is_live ? "data:image/jpeg;base64,abc" : null, publishedAt: room.published_at }) })
     };
     vm.runInNewContext(guestCode, guestContext);
     await new Promise((resolve) => setTimeout(resolve, 30));
+    assert.equal(masterIds.onlineViewerCount.textContent, "(1)");
+    assert.equal(masterIds.mobileViewerCount.textContent, "1");
+    assert.equal(masterIds.onlineViewerList.children[0].textContent, "Jhonata");
+    visitorName = "Ana";
+    guestEvents["real:visitor-name-changed"]();
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(masterIds.onlineViewerList.children[0].textContent, "Ana");
     assert.ok(signals.some((message) => message.payload.kind === "join"));
     assert.ok(signals.some((message) => message.payload.kind === "offer"));
     assert.ok(signals.some((message) => message.payload.kind === "answer"));
@@ -222,6 +246,8 @@ async function runLive() {
     assert.equal(track.stopped, true);
     assert.equal(guestIds.guestVideo.hidden, true);
     assert.equal(guestIds.guestWaiting.hidden, false);
+    assert.equal(masterIds.onlineViewerCount.textContent, "(0)");
+    assert.equal(masterIds.mobileViewerCount.textContent, "0");
 }
 
 (async () => {
@@ -231,6 +257,8 @@ async function runLive() {
     assert.match(noInvite.ids.guestStatus.textContent, /inválido/);
 
     const code = "11111111-2222-4333-8444-555555555555";
+    const unnamed = await runGuest(`#convite=${code}`, null, "");
+    assert.equal(unnamed.calls.length, 0);
     const live = await runGuest(`#convite=${code}`, {
         ok: true, status: 200,
         json: async () => ({ live: true, frame: "data:image/jpeg;base64,abc", publishedAt: "2026-09-28T00:00:00Z" })

@@ -1,0 +1,12 @@
+.real-visitor-dialog { width: min(420px, calc(100vw - 32px)); max-height: calc(100vh - 32px); padding: 0; color: #f4eee8; background: #201d20; border: 1px solid #a69b9e; border-radius: 14px; box-shadow: 0 24px 90px #000b; }
+.real-visitor-dialog::backdrop { background: #080609df; backdrop-filter: blur(6px); }
+.real-visitor-dialog__form { display: grid; gap: 12px; padding: clamp(22px, 5vw, 34px); font: 14px/1.5 "Segoe UI", Arial, sans-serif; }
+.real-visitor-dialog__eyebrow { color: #cfbbb2; font-size: 11px; font-weight: 700; letter-spacing: .18em; }
+.real-visitor-dialog h2 { margin: 0; color: #fff7f0; font: 600 27px/1.2 Georgia, serif; }
+.real-visitor-dialog p { margin: 0 0 8px; color: #d5c9c9; }
+.real-visitor-dialog label { font-weight: 700; }
+.real-visitor-dialog input { min-height: 48px; width: 100%; padding: 10px 12px; color: #fff; background: #110f11; border: 1px solid #9e8f96; border-radius: 7px; font: inherit; }
+.real-visitor-dialog button { min-height: 48px; margin-top: 7px; color: #171316; background: #efe2d6; border: 0; border-radius: 7px; font: 700 14px "Segoe UI", Arial, sans-serif; cursor: pointer; }
+.real-visitor-dialog :focus-visible, .real-visitor-edit:focus-visible { outline: 3px solid #f4d7a1; outline-offset: 3px; }
+.real-visitor-edit { position: fixed; z-index: 900; left: 12px; bottom: 12px; max-width: calc(100vw - 24px); padding: 7px 10px; color: #e8d9d9; background: #282228ed; border: 1px solid #786b73; border-radius: 20px; font: 11px "Segoe UI", Arial, sans-serif; cursor: pointer; }
+.real-visitor-required .real-visitor-edit { display: none; }

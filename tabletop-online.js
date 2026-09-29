@@ -11,6 +11,9 @@
     const toggle = $("onlineToggle");
     const invite = $("onlineInvite");
     const copy = $("onlineCopy");
+    const viewerCount = $("onlineViewerCount");
+    const viewerList = $("onlineViewerList");
+    const mobileViewerCount = $("mobileViewerCount");
     let client;
     let user = null;
     let room = null;
@@ -37,6 +40,31 @@
         toggle.textContent = room?.is_live ? "Encerrar transmissão" : "Iniciar transmissão";
         invite.value = room ? inviteUrl(room.invite_code) : "";
         copy.disabled = !room?.is_live;
+        showViewers();
+    }
+
+    function showViewers() {
+        const names = room?.is_live && channel?.presenceState
+            ? Object.values(channel.presenceState()).flat()
+                .filter((entry) => entry?.role === "viewer" && typeof entry.name === "string")
+                .map((entry) => entry.name.trim().slice(0, 32)).filter(Boolean)
+            : [];
+        viewerCount.textContent = `(${names.length})`;
+        if (mobileViewerCount) mobileViewerCount.textContent = String(names.length);
+        $("openViewerPeek")?.setAttribute("aria-label", `Mostrar espectadores, ${names.length} assistindo`);
+        viewerList.replaceChildren();
+        if (!names.length) {
+            const empty = document.createElement("li");
+            empty.textContent = "Ninguém está assistindo.";
+            viewerList.appendChild(empty);
+            return;
+        }
+        names.sort((a, b) => a.localeCompare(b, "pt-BR"));
+        names.forEach((name) => {
+            const item = document.createElement("li");
+            item.textContent = name;
+            viewerList.appendChild(item);
+        });
     }
 
     function closePeers() {
@@ -117,7 +145,9 @@
         if (channel) client.removeChannel(channel);
         closePeers();
         channel = room ? client.channel(`real-tabletop:${room.invite_code}`)
-            .on("broadcast", { event: "rtc" }, handleSignal).subscribe() : null;
+            .on("broadcast", { event: "rtc" }, handleSignal)
+            .on("presence", { event: "sync" }, showViewers).subscribe() : null;
+        showViewers();
     }
 
     async function loadRoom() {
@@ -144,6 +174,7 @@
         user = nextUser;
         room = null;
         if (channel) { client.removeChannel(channel); channel = null; }
+        showViewers();
         showState();
         if (!user) { say("Entre com a conta do mestre para compartilhar a mesa."); return; }
         say("Carregando sua sala…");

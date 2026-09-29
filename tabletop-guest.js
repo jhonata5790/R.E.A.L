@@ -17,6 +17,7 @@
     let videoReady = false;
     let channelReady = false;
     let channel = null;
+    let presenceTracked = false;
     let peer = null;
     let pendingCandidates = [];
     let liveSince = 0;
@@ -48,6 +49,7 @@
 
     function showWaiting(message) {
         knownLive = false;
+        if (presenceTracked && channel) { presenceTracked = false; channel.untrack().catch(() => {}); }
         liveSince = 0;
         closePeer();
         frame.hidden = true;
@@ -66,6 +68,17 @@
         if (knownLive && channelReady && !videoReady && typeof RTCPeerConnection !== "undefined") {
             signal({ kind: "join", viewerId });
         }
+    }
+
+    async function updatePresence(force = false) {
+        if (!knownLive || !channelReady || !channel || (presenceTracked && !force)) return;
+        const name = window.REAL_VISITOR_NAME?.getName();
+        if (!name) return;
+        presenceTracked = true;
+        try {
+            await channel.track({ role: "viewer", name });
+            if (!knownLive) { presenceTracked = false; await channel.untrack(); }
+        } catch { presenceTracked = false; }
     }
 
     async function addCandidate(candidate) {
@@ -141,7 +154,8 @@
     if (!config) { showWaiting("A conexão online não está configurada."); return; }
 
     async function refresh() {
-        if (busy || document.visibilityState === "hidden") return;
+        if (busy || document.visibilityState === "hidden"
+            || (window.REAL_VISITOR_NAME && !window.REAL_VISITOR_NAME.getName())) return;
         busy = true;
         try {
             const response = await fetch(`${config.url}/functions/v1/tabletop-guest-view`, {
@@ -167,6 +181,7 @@
             waiting.hidden = true;
             frame.hidden = videoReady;
             if (!videoReady) say(fallbackMessage());
+            updatePresence();
             requestJoin();
         } catch { say("Conexão interrompida. Tentando novamente…"); }
         finally { busy = false; }
@@ -177,11 +192,20 @@
         channel = client.channel(`real-tabletop:${inviteCode}`)
             .on("broadcast", { event: "changed" }, refresh)
             .on("broadcast", { event: "rtc" }, handleSignal)
-            .subscribe((state) => { channelReady = state === "SUBSCRIBED"; if (channelReady) requestJoin(); });
+            .subscribe((state) => {
+                channelReady = state === "SUBSCRIBED";
+                if (!channelReady) presenceTracked = false;
+                if (channelReady) { requestJoin(); updatePresence(); }
+            });
     }
+    window.REAL_VISITOR_NAME?.ready.then(() => { refresh(); updatePresence(); });
+    window.addEventListener("real:visitor-name-changed", () => { refresh(); updatePresence(true); });
     refresh();
     setInterval(refresh, 4000);
     setInterval(requestJoin, 5000);
     document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") { refresh(); requestJoin(); } });
-    window.addEventListener("pagehide", closePeer);
+    window.addEventListener("pagehide", () => {
+        if (presenceTracked && channel) channel.untrack().catch(() => {});
+        closePeer();
+    });
 })();

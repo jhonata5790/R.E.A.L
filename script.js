@@ -6,6 +6,16 @@ const ctx = canvas.getContext("2d");
 
 const panels = { grid: $("gridPanel"), tokens: $("tokenPanel"), session: $("sessionPanel"), view: $("playerViewPanel") };
 const panelButtons = { grid: $("toolMap"), tokens: $("toolToken"), session: $("toolSession"), view: $("toolPlayerView") };
+const toolbar = $("toolbar");
+const dockToggle = $("toggleToolDock");
+dockToggle.addEventListener("click", () => {
+    const opening = toolbar.hidden;
+    if (!opening && toolbar.contains(document.activeElement)) dockToggle.focus();
+    toolbar.hidden = !opening;
+    document.body.classList.toggle("tool-dock-collapsed", !opening);
+    dockToggle.setAttribute("aria-expanded", String(opening));
+    dockToggle.setAttribute("aria-label", opening ? "Recolher ferramentas da mesa" : "Abrir ferramentas da mesa");
+});
 const VIEW_RULES = window.REAL_TABLETOP_VIEW;
 const previewDialog = $("playerPreview");
 const previewCanvas = $("playerPreviewCanvas");
@@ -899,7 +909,7 @@ $("newSession").addEventListener("click", async () => {
 // Teclado
 window.addEventListener("keydown", (event) => {
     const isTyping = event.target.matches?.("input, textarea, select");
-    if (!isTyping && !event.repeat && !event.ctrlKey && !event.metaKey && !event.altKey && event.key.toLowerCase() === "h") {
+    if (!isTyping && !document.querySelector("dialog[open]") && !event.repeat && !event.ctrlKey && !event.metaKey && !event.altKey && event.key.toLowerCase() === "h") {
         event.preventDefault();
         toggleHud();
         return;
