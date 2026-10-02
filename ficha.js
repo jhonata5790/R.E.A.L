@@ -6,7 +6,7 @@ const ATTRIBUTES = [
     { id: "presenca", name: "Presença", hint: "Influência e percepção" },
     { id: "vigor", name: "Vigor", hint: "Resistência e fôlego" }
 ];
-const ATTRIBUTE_TOTAL = 9;
+const ATTRIBUTE_MAX_INITIAL = 3;
 const ORIGINS = window.REAL_ORIGINS;
 const CLASSES = [
     { id: "combatente", name: "Combatente", description: "Enfrenta o perigo diretamente e protege o grupo em combate." },
@@ -18,7 +18,7 @@ const ATTRIBUTE_THEMES = window.REAL_ATTRIBUTE_THEMES;
 const $ = (id) => document.getElementById(id);
 const stepSections = [...document.querySelectorAll(".sheet-step")];
 const stepButtons = [...document.querySelectorAll("[data-step-button]")];
-const errorIds = ["attributesError", "originError", "classError", "finalError"];
+const errorIds = ["classError", "attributesError", "originError", "finalError"];
 
 function readState() {
     try {
@@ -49,6 +49,8 @@ const attributes = Object.fromEntries(ATTRIBUTES.map(({ id }) => {
 }));
 let origin = normalizedChoice(existing?.origin, ORIGINS);
 let characterClass = normalizedChoice(existing?.class || existing?.role, CLASSES);
+const originalClass = characterClass;
+const originalAttributes = { ...attributes };
 let currentStep = 0;
 let furthestStep = existing ? 3 : 0;
 let selectedAttributeId = ATTRIBUTES[0].id;
@@ -77,8 +79,17 @@ function make(tag, className, text) {
     return element;
 }
 
+function attributeBudget() {
+    return characterClass === "mundano" ? 3 : characterClass ? 4 : 0;
+}
+
 function pointsRemaining() {
-    return ATTRIBUTE_TOTAL - Object.values(attributes).reduce((total, value) => total + value, 0);
+    return ATTRIBUTES.length + attributeBudget() - Object.values(attributes).reduce((total, value) => total + value, 0);
+}
+
+function unchangedSavedAllocation() {
+    return Boolean(existing && characterClass === originalClass
+        && ATTRIBUTES.every(({ id }) => attributes[id] === originalAttributes[id]));
 }
 
 function clearError(index) {
@@ -130,11 +141,17 @@ function selectAttribute(id) {
 
 function updateAttributeControls() {
     const remaining = pointsRemaining();
-    const zeros = Object.values(attributes).filter((value) => value === 0).length;
+    const budget = attributeBudget();
+    $("attributeRules").textContent = `Todo atributo começa em 1. ${characterClass === "mundano" ? "Mundano tem 3 pontos" : "Esta classe tem 4 pontos"} para distribuir. Você pode reduzir quantos atributos quiser a 0 para ganhar pontos. O máximo inicial de cada um é 3.`;
     $("pointsRemaining").textContent = remaining;
+    $("attributeBudgetHint").textContent = unchangedSavedAllocation() && (remaining !== 0 || Object.values(attributes).some((value) => value > ATTRIBUTE_MAX_INITIAL))
+        ? "Distribuição antiga preservada. Para redistribuir, siga o limite inicial de 3 por atributo."
+        : remaining < 0
+            ? `Você gastou ${-remaining} ${remaining === -1 ? "ponto a mais" : "pontos a mais"}. Reduza atributos antes de continuar.`
+            : "";
     $("selectedAttributeValue").textContent = attributes[selectedAttributeId];
-    $("decreaseAttribute").disabled = attributes[selectedAttributeId] === 0 || (attributes[selectedAttributeId] === 1 && zeros > 0);
-    $("increaseAttribute").disabled = attributes[selectedAttributeId] === 5 || remaining === 0;
+    $("decreaseAttribute").disabled = attributes[selectedAttributeId] === 0;
+    $("increaseAttribute").disabled = attributes[selectedAttributeId] >= ATTRIBUTE_MAX_INITIAL || remaining <= 0;
     ATTRIBUTES.forEach(({ id, name }) => {
         const control = attributeControls.get(id);
         control.value.textContent = attributes[id];
@@ -145,10 +162,9 @@ function updateAttributeControls() {
 
 function changeAttribute(id, delta) {
     const next = attributes[id] + delta;
-    if (next < 0 || next > 5 || (delta > 0 && pointsRemaining() === 0)) return;
-    if (next === 0 && Object.values(attributes).includes(0)) return;
+    if (next < 0 || (delta > 0 && (next > ATTRIBUTE_MAX_INITIAL || pointsRemaining() <= 0))) return;
     attributes[id] = next;
-    clearError(0);
+    clearError(1);
     updateAttributeControls();
 }
 
@@ -237,7 +253,7 @@ function renderOrigins() {
         header.addEventListener("click", () => setOpenOrigin(openOriginId === option.id ? null : option.id));
         choose.addEventListener("click", () => {
             origin = option.id;
-            clearError(1);
+            clearError(2);
             updateOriginSelection();
             header.focus({ preventScroll: true });
             const close = () => { if (openOriginId === option.id) setOpenOrigin(null); };
@@ -310,9 +326,10 @@ function renderClasses() {
         classControls.set(option.id, { item, button, badge });
         button.addEventListener("click", () => {
             characterClass = option.id;
-            clearError(2);
+            clearError(0);
             updateTheme();
             updateClassSelection();
+            updateAttributeControls();
         });
     });
     $("classList").append(grid, mundane);
@@ -360,16 +377,24 @@ function showStep(index) {
 
 function validateStep(index) {
     clearError(index);
-    if (index === 0 && pointsRemaining() !== 0) {
-        showError(0, "Distribua todos os pontos antes de continuar.");
+    if (index === 0 && !characterClass) {
+        showError(0, "Escolha uma classe ou Mundano para continuar.");
         return false;
     }
-    if (index === 1 && !origin) {
-        showError(1, "Escolha uma origem para continuar.");
-        return false;
+    if (index === 1 && !unchangedSavedAllocation()) {
+        if (Object.values(attributes).some((value) => value > ATTRIBUTE_MAX_INITIAL)) {
+            showError(1, "O máximo inicial é 3 em cada atributo.");
+            return false;
+        }
+        if (pointsRemaining() !== 0) {
+            showError(1, pointsRemaining() < 0
+                ? "Reduza os atributos até não exceder os pontos disponíveis."
+                : "Distribua todos os pontos antes de continuar.");
+            return false;
+        }
     }
-    if (index === 2 && !characterClass) {
-        showError(2, "Escolha uma classe ou Mundano para continuar.");
+    if (index === 2 && !origin) {
+        showError(2, "Escolha uma origem para continuar.");
         return false;
     }
     if (index === 3 && !$("characterName").value.trim()) {
@@ -418,7 +443,7 @@ function deleteCharacter() {
 
 if (existing) {
     $("pageTitle").textContent = "Editar " + (existing.name || "personagem");
-    $("pageDescription").textContent = "Revise os atributos, a origem, a classe e os detalhes desta ficha.";
+    $("pageDescription").textContent = "Revise a classe, os atributos, a origem e os detalhes desta ficha.";
     $("deleteCharacter").hidden = false;
     document.title = (existing.name || "Editar ficha") + " | R.E.A.L";
 }

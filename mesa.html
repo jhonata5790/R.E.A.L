@@ -59,9 +59,21 @@
                     <p id="hudCharacterEmpty" hidden>Nenhuma ficha vinculada a esta campanha.</p>
                 </section>
                 <section id="hudDocuments" class="hud-menu__section" aria-label="Documentos da campanha" hidden>
-                    <h3>Anotações da campanha</h3>
-                    <p id="hudCampaignNotes"></p>
-                    <p class="hud-menu__hint">A biblioteca de documentos ainda será construída. As anotações atuais continuam na campanha.</p>
+                    <h3>Documentos do mestre</h3>
+                    <p class="hud-menu__hint">Prepare pistas aqui. Só o documento revelado aparece para quem está assistindo à mesa.</p>
+                    <p id="hudDocumentStatus" class="hud-documents__status" role="status" aria-live="polite"></p>
+                    <ul id="hudDocumentList" class="hud-documents__list" aria-label="Documentos preparados"></ul>
+                    <p id="hudDocumentEmpty" class="hud-menu__hint">Nenhum documento preparado ainda.</p>
+                    <form id="hudDocumentForm" class="hud-documents__form">
+                        <h4 id="hudDocumentFormTitle">Novo documento</h4>
+                        <label>Título<input id="hudDocumentTitle" type="text" maxlength="80" required></label>
+                        <label>Tipo<select id="hudDocumentKind"><option value="text">Texto</option><option value="image">Imagem</option></select></label>
+                        <label id="hudDocumentTextLabel">Conteúdo<textarea id="hudDocumentText" rows="5" maxlength="12000"></textarea></label>
+                        <label id="hudDocumentImageLabel" hidden>Imagem<input id="hudDocumentImage" type="file" accept="image/png,image/jpeg,image/webp"></label>
+                        <p id="hudDocumentImageHint" class="hud-menu__hint" hidden></p>
+                        <div class="hud-documents__actions"><button id="hudDocumentSave" type="submit">Salvar documento</button><button id="hudDocumentCancel" type="button" hidden>Cancelar edição</button></div>
+                    </form>
+                    <details class="hud-documents__notes"><summary>Anotações privadas da campanha</summary><p id="hudCampaignNotes"></p></details>
                     <a id="hudCampaignLink" href="index.html#campanhas">Abrir campanha</a>
                 </section>
                 <footer class="hud-menu__footer"><a class="campaign-return" href="index.html">Sair da mesa</a></footer>
@@ -562,7 +574,8 @@
     <script src="script.js?v=20260928-tool-dock"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.3/dist/umd/supabase.js"></script>
     <script src="supabase-config.js?v=20260928-online-tabletop"></script>
-    <script src="tabletop-online.js?v=20260928-hud-menu"></script>
+    <script src="tabletop-online.js?v=20260929-documents"></script>
+    <script src="tabletop-documents.js?v=20260929-documents"></script>
     <script src="tabletop-hud.js?v=20260928-hud-menu"></script>
 
 </body>

@@ -51,16 +51,19 @@ function openCharacter(character, options = {}) {
         "characterOrigin", "characterClass", "characterPlayer", "characterCampaign",
         "editCharacter", "characterAppearance", "characterPersonality",
         "characterHistory", "characterObjective", "attributeWheelImage",
-        "attributeWheelValues", "attributeList", "storageNote", "noteWorkspace", "noteCanvas",
+        "attributeWheelValues", "toggleAttributeEdit", "attributeEditHint", "storageNote", "noteWorkspace", "noteCanvas",
         "skillsBody", "skillRollResult", "originTrainingSummary", "originTrainingChoices",
         "originSkillChoice1", "originSkillChoice2", "originTrainingMessage",
         "toggleNotesFullscreen", "entryDialog", "entryDialogTitle", "entryCategoryField",
-        "entryCategory", "entryForm", "entryName", "entryDescription", "cancelEntry",
+        "entryCategory", "entryForm", "entryName", "entryDescription", "cancelEntry", "entrySubmit",
+        "openCatalog", "catalogDialog", "catalogDialogTitle", "catalogCollections", "catalogCategories", "catalogGroupTitle", "catalogList", "closeCatalog",
         "inventoryList", "abilitiesList", "ritualsList", "equippedWeapon",
+        "defenseValue", "blockValue", "dodgeValue", "protectionValue", "resistanceValue", "proficiencyValue", "defenseExplanation",
+        "defenseBonus", "blockBonus", "dodgeBonus", "resistanceNotes", "proficiencyNotes", "equipmentMessage",
         ...["informacoes", "descricoes", "atributos", "pericias", "combate", "inventario", "habilidades", "rituais"].map((id) => `panel-${id}`),
         "subpanel-textos", "subpanel-anotacoes"
     ].map((id) => [id, new Element()]));
-    const sheetTabs = ["informacoes", "descricoes", "atributos", "pericias", "combate", "inventario", "habilidades", "rituais"].map((id) => {
+    const sheetTabs = ["informacoes", "atributos", "pericias", "combate", "inventario", "habilidades", "rituais", "descricoes"].map((id) => {
         const tab = new Element("button");
         tab.dataset.sheetTab = id;
         tab.textContent = id;
@@ -78,7 +81,7 @@ function openCharacter(character, options = {}) {
         button.dataset.addEntry = id;
         return button;
     });
-    const inventoryFilters = ["todos", "itens", "armas", "protecao", "geral", "amaldicoados"].map((id) => {
+    const inventoryFilters = ["todos", "itens", "armas", "municoes", "protecao", "geral", "amaldicoados"].map((id) => {
         const button = new Element("button");
         button.dataset.inventoryFilter = id;
         return button;
@@ -122,7 +125,7 @@ function openCharacter(character, options = {}) {
             addEventListener() {}
         },
         window: { setTimeout: (callback) => callback(), clearTimeout() {}, confirm: () => true, matchMedia: () => viewport },
-        localStorage: { getItem: () => stored, setItem: (_key, value) => { stored = value; } },
+        localStorage: { getItem: () => stored, setItem: (_key, value) => { if (options.failStorage) throw new Error("Storage full"); stored = value; } },
         location: { search: options.search ?? (character ? `?id=${character.id}` : "") },
         URLSearchParams,
         crypto: { randomUUID: () => `item-${++nextId}` },
@@ -134,6 +137,10 @@ function openCharacter(character, options = {}) {
     vm.runInContext(fs.readFileSync(path.join(root, "attribute-themes.js"), "utf8"), context);
     vm.runInContext(fs.readFileSync(path.join(root, "nex-rules.js"), "utf8"), context);
     vm.runInContext(fs.readFileSync(path.join(root, "origins.js"), "utf8"), context);
+    vm.runInContext(fs.readFileSync(path.join(root, "equipment-catalog.js"), "utf8"), context);
+    vm.runInContext(fs.readFileSync(path.join(root, "equipment-rules.js"), "utf8"), context);
+    if (options.catalogCollections) context.window.REAL_EQUIPMENT_COLLECTIONS = [...context.window.REAL_EQUIPMENT_COLLECTIONS, ...options.catalogCollections];
+    if (options.catalogItems) context.window.REAL_EQUIPMENT_CATALOG = [...context.window.REAL_EQUIPMENT_CATALOG, ...options.catalogItems];
     vm.runInContext(fs.readFileSync(path.join(root, "personagem.js"), "utf8"), context);
     return { ids, context, sheetTabs, descriptionTabs, addEntryButtons, inventoryFilters, shapeButtons, viewport, saved: () => JSON.parse(stored) };
 }
@@ -216,11 +223,63 @@ assert.equal(ids.editCharacter.href, "ficha.html?id=personagem-1");
 assert.equal(ids.attributeWheelImage.src, "assets/atributos-especialista.png");
 assert.equal(context.document.body.dataset?.characterTheme, "especialista");
 assert.equal(ids.attributeWheelValues.children.length, 5);
-assert.equal(ids.attributeList.children.length, 5);
 assert.deepEqual(ids.attributeWheelValues.children.map((marker) => marker.children[0].textContent), ["4", "1", "3", "0", "1"]);
 assert.equal(ids.attributeWheelValues.children[0].style["--wheel-x"], "50%");
-assert.equal(ids.attributeList.children[3].children[0].textContent, "Presença");
-assert.equal(ids.attributeList.children[3].children[1].textContent, "0");
+assert.equal(ids.attributeWheelValues.children[3].getAttribute("aria-label"), "Presença: 0");
+const attributeEdit = openCharacter(JSON.parse(JSON.stringify(character)), { dice: [15, 2, 18, 7] });
+const editWheel = attributeEdit.ids.attributeWheelValues;
+const editButton = attributeEdit.ids.toggleAttributeEdit;
+assert.equal(editWheel.children[1].children[1].disabled, true, "a roda começa em modo de leitura");
+editButton.click();
+assert.equal(editButton.getAttribute("aria-pressed"), "true");
+assert.equal(editWheel.dataset.editing, "true");
+assert.equal(attributeEdit.ids.attributeEditHint.hidden, false);
+const forceMarker = editWheel.children[1];
+forceMarker.children[1].click();
+assert.equal(forceMarker.children[2].hidden, false, "clicar no círculo abre a digitação");
+assert.equal(forceMarker.children[2].focused, true);
+forceMarker.children[2].value = "-3";
+forceMarker.children[2].handlers.change();
+assert.equal(forceMarker.children[0].textContent, "-3");
+assert.equal(forceMarker.getAttribute("aria-label"), "Força: -3");
+assert.equal(attributeEdit.saved().characters[0].attributes.forca, -3, "atributo editado é salvo no formato existente");
+const editedLuta = attributeEdit.ids.skillsBody.children[15];
+assert.equal(editedLuta.children[1].children[0].children[1].textContent, "4d20 ↓");
+editedLuta.children[0].children[0].children[0].click();
+assert.match(attributeEdit.ids.skillRollResult.getAttribute("aria-label"), /Luta: 4d20: 15, 2, 18, 7\. Menor dado: 2\. Bônus: 0\. Total: 2\./);
+const vigorMarker = editWheel.children[4];
+vigorMarker.children[1].click();
+vigorMarker.children[2].value = "101";
+vigorMarker.children[2].handlers.change();
+assert.equal(vigorMarker.children[0].textContent, "100", "valor acima do máximo é limitado a 100");
+assert.equal(attributeEdit.ids.vidaMaximum.textContent, "116", "Vida acompanha o Vigor editado");
+vigorMarker.children[1].click();
+vigorMarker.children[2].value = "-101";
+vigorMarker.children[2].handlers.change();
+assert.equal(vigorMarker.children[0].textContent, "-100", "valor abaixo do mínimo é limitado a −100");
+assert.equal(attributeEdit.ids.vidaMaximum.textContent, "0", "máximos de recursos não ficam negativos");
+assert.equal(attributeEdit.ids.skillsBody.children[9].children[1].children[0].children[1].textContent, "101d20 ↓", "−100 rola 101 dados e usa o pior");
+const presenceMarker = editWheel.children[3];
+presenceMarker.children[1].click();
+presenceMarker.children[2].value = "100";
+presenceMarker.children[2].handlers.change();
+assert.equal(attributeEdit.ids.esforcoMaximum.textContent, "103");
+assert.equal(attributeEdit.ids.ritualDifficulty.textContent, "111");
+presenceMarker.children[1].click();
+presenceMarker.children[2].value = "";
+presenceMarker.children[2].handlers.change();
+assert.equal(presenceMarker.children[0].textContent, "100", "campo vazio não apaga o atributo");
+forceMarker.children[1].click();
+forceMarker.children[2].value = "44";
+forceMarker.children[2].handlers.keydown({ key: "Escape", preventDefault() {} });
+assert.equal(forceMarker.children[0].textContent, "-3", "Escape cancela a digitação");
+editButton.click();
+assert.equal(editButton.getAttribute("aria-pressed"), "false");
+assert.equal(forceMarker.children[1].disabled, true);
+assert.equal(attributeEdit.ids.attributeEditHint.hidden, true);
+const attributeReload = openCharacter(attributeEdit.saved().characters[0]);
+assert.equal(attributeReload.ids.attributeWheelValues.children[1].children[0].textContent, "-3");
+assert.equal(attributeReload.ids.attributeWheelValues.children[4].children[0].textContent, "-100");
 assert.equal(ids.characterHistory.textContent, "Busca pistas do passado.");
 assert.equal(ids.characterObjective.textContent, "Encontrar a verdade.");
 assert.match(ids.equippedWeapon.children[0].textContent, /Nenhuma arma equipada/);
@@ -245,25 +304,30 @@ assert.equal(saved().characters[0].sheet, undefined, "mostrar a habilidade não 
 assert.equal(sheetTabs.length, 8);
 assert.equal(sheetTabs[0].getAttribute("aria-selected"), "true");
 assert.equal(ids["panel-atributos"].hidden, true);
-sheetTabs[1].click();
+sheetTabs[7].click();
 assert.equal(ids["panel-informacoes"].hidden, true);
 assert.equal(ids["panel-descricoes"].hidden, false);
-sheetTabs[1].handlers.keydown({ key: "ArrowRight", preventDefault() {} });
-assert.equal(sheetTabs[2].getAttribute("aria-selected"), "true", "setas navegam pelas abas");
-assert.equal(sheetTabs[2].focused, true);
+sheetTabs[7].handlers.keydown({ key: "ArrowRight", preventDefault() {} });
+assert.equal(sheetTabs[0].getAttribute("aria-selected"), "true", "seta à direita volta da última aba à primeira");
+sheetTabs[0].handlers.keydown({ key: "ArrowRight", preventDefault() {} });
+assert.equal(sheetTabs[1].getAttribute("aria-selected"), "true", "setas seguem a ordem visual das abas");
+assert.equal(sheetTabs[1].focused, true);
 assert.equal(ids["panel-atributos"].hidden, false);
 const desktopView = openCharacter(character, { desktopViewport: true });
 assert.equal(desktopView.ids.sheetTabs.getAttribute("role"), "navigation");
-for (const id of ["informacoes", "atributos", "pericias", "combate"]) {
+for (const id of ["atributos", "pericias"]) {
     assert.equal(desktopView.ids[`panel-${id}`].hidden, false, `${id} aparece no painel desktop`);
     assert.equal(desktopView.ids[`panel-${id}`].getAttribute("role"), "region");
 }
+assert.equal(desktopView.ids["panel-informacoes"].hidden, true, "informações ficam em uma aba, não em mais um cartão fixo");
+assert.equal(desktopView.ids["panel-combate"].hidden, true);
 assert.equal(desktopView.ids["panel-inventario"].hidden, true);
-desktopView.sheetTabs[5].click();
+desktopView.sheetTabs[4].click();
 assert.equal(desktopView.ids["panel-inventario"].hidden, false);
 assert.equal(desktopView.ids["panel-combate"].hidden, true);
-assert.equal(desktopView.ids["panel-pericias"].hidden, false, "trocar a seção complementar não esconde as perícias");
-assert.equal(desktopView.sheetTabs[5].getAttribute("aria-pressed"), "true");
+assert.equal(desktopView.ids["panel-pericias"].hidden, true, "a área direita mostra uma seção por vez");
+assert.equal(desktopView.ids["panel-atributos"].hidden, false, "a roda permanece visível ao trocar a seção direita");
+assert.equal(desktopView.sheetTabs[4].getAttribute("aria-pressed"), "true");
 desktopView.viewport.matches = false;
 desktopView.viewport.onChange();
 assert.equal(desktopView.ids.sheetTabs.getAttribute("role"), "tablist");
@@ -287,6 +351,414 @@ assert.equal(saved().characters[0].sheet.notes[0].text, "Ligação com o culto")
 assert.equal(saved().characters[0].sheet.notes[0].x, 45);
 ids.toggleNotesFullscreen.click();
 assert.equal(ids.noteWorkspace.classList.contains("is-expanded"), true);
+
+const catalogView = openCharacter(JSON.parse(JSON.stringify(character)));
+const catalog = catalogView.context.window.REAL_EQUIPMENT_CATALOG;
+const knife = catalog.find((item) => item.id === "faca");
+const catalogRow = (view, name) => view.ids.catalogList.children.find((row) => row.children[0]?.children[0]?.textContent === name);
+const catalogCategoryButton = (view, name) => view.ids.catalogCategories.children.find((button) => button.textContent === name);
+const catalogFact = (details, label) => {
+    const facts = details.children.find((child) => child.tag === "dl");
+    return facts?.children.find((pair) => pair.children[0].textContent === label)?.children[1].textContent;
+};
+assert.equal(catalog.length, 106, "as 34 armas, seis munições, três proteções, 34 itens gerais e 29 itens amaldiçoados estão no catálogo");
+assert.equal(new Set(catalog.map((item) => item.id)).size, catalog.length, "cada item tem um identificador único");
+assert.equal(catalogView.context.window.REAL_WEAPON_CATALOG.length, 34, "a lista de armas não inclui munições");
+assert.equal(catalogView.context.window.REAL_EQUIPMENT_COLLECTIONS[0].name, "Ordem Paranormal");
+assert.equal(catalogView.context.window.REAL_EQUIPMENT_COLLECTIONS[0].cover, null, "a capa pode ser adicionada depois");
+assert.equal(knife.group, "Ordem Paranormal");
+assert.equal(knife.inventoryCategory, "armas");
+assert.equal(knife.name, "Faca");
+assert.equal(knife.weaponClass, "Armas Simples");
+assert.equal(knife.weaponStyle, "Corpo a Corpo");
+assert.equal(knife.weaponTraits, "Leve");
+assert.equal(knife.category, 0);
+assert.equal(knife.range, "curto");
+assert.equal(knife.damage, "1d4");
+assert.equal(knife.damageType, "corte");
+assert.equal(knife.critical, 19);
+assert.equal(knife.space, 1);
+assert.equal(knife.description, "Uma lâmina longa e afiada, como uma navalha, uma faca de churrasco ou uma faca militar (facas de cozinha pequena causam apenas 1d3 pontos de dano). É uma arma ágil e pode ser arremessada.");
+catalogView.addEntryButtons[0].click();
+assert.equal(catalogView.ids.entryDialog.open, true, "Criar item abre o formulário manual");
+assert.equal(catalogView.ids.entryDialogTitle.textContent, "Criar item");
+assert.equal(catalogView.ids.entrySubmit.textContent, "Criar item");
+assert.equal(catalogView.ids.catalogDialog.open, undefined, "o catálogo permanece separado");
+catalogView.ids.cancelEntry.click();
+catalogView.ids.openCatalog.click();
+assert.equal(catalogView.ids.catalogDialog.open, true);
+assert.equal(catalogView.ids.entryDialog.open, false);
+assert.equal(catalogView.ids.catalogGroupTitle.textContent, "Armas · Ordem Paranormal");
+assert.equal(catalogView.ids.catalogCollections.children.length, 1);
+assert.equal(catalogView.ids.catalogCategories.children.length, 5);
+assert.equal(catalogCategoryButton(catalogView, "Armas").getAttribute("aria-pressed"), "true");
+assert.equal(catalogView.ids.catalogList.children.length, 34);
+const collectionButton = catalogView.ids.catalogCollections.children[0];
+assert.equal(collectionButton.tag, "button");
+assert.equal(collectionButton.getAttribute("aria-label"), "Selecionar catálogo Ordem Paranormal");
+assert.equal(collectionButton.getAttribute("aria-pressed"), "true");
+assert.equal(collectionButton.children[0].textContent, "Capa em breve");
+assert.equal(collectionButton.children[1].textContent, "Ordem Paranormal");
+const knifeRow = catalogRow(catalogView, "Faca");
+assert.equal(knifeRow.children[0].tag, "button");
+assert.equal(knifeRow.children[0].children[0].textContent, "Faca");
+assert.equal(knifeRow.children[0].children[1].textContent, "Dano: 1d4   ·   Crítico: 19");
+assert.equal(knifeRow.children[0].getAttribute("aria-expanded"), "false");
+assert.equal(knifeRow.children[1].hidden, true, "os detalhes começam fechados");
+knifeRow.children[0].click();
+assert.equal(knifeRow.children[0].getAttribute("aria-expanded"), "true");
+assert.equal(knifeRow.children[1].hidden, false);
+assert.equal(knifeRow.children[1].children[0].textContent, "Armas Simples · Corpo a Corpo · Leve");
+assert.equal(catalogFact(knifeRow.children[1], "Categoria"), "0");
+assert.equal(catalogFact(knifeRow.children[1], "Alcance"), "curto");
+assert.equal(catalogFact(knifeRow.children[1], "Tipo"), "corte");
+assert.equal(catalogFact(knifeRow.children[1], "Espaços"), "1");
+assert.equal(knifeRow.children[1].children[2].textContent, knife.description);
+assert.equal(knifeRow.children[1].children[3].getAttribute("aria-label"), "Adicionar Faca ao inventário");
+knifeRow.children[0].click();
+assert.equal(knifeRow.children[1].hidden, true, "o item pode ser fechado novamente");
+catalogView.ids.closeCatalog.click();
+assert.equal(catalogView.ids.catalogDialog.open, false);
+catalogView.ids.openCatalog.click();
+catalogRow(catalogView, "Faca").children[0].click();
+catalogRow(catalogView, "Faca").children[1].children.at(-1).click();
+assert.equal(catalogView.ids.catalogDialog.open, false);
+const savedKnife = catalogView.saved().characters[0].sheet.inventario[0];
+assert.equal(savedKnife.category, "armas");
+assert.equal(savedKnife.catalogId, "faca");
+assert.equal(savedKnife.group, "Ordem Paranormal");
+assert.equal(savedKnife.weaponCategory, 0);
+assert.equal(savedKnife.damage, "1d4");
+assert.equal(savedKnife.damageType, "corte");
+assert.equal(savedKnife.critical, 19);
+assert.equal(savedKnife.space, 1);
+assert.equal(savedKnife.weaponTraits, "Leve");
+catalogView.ids.inventoryList.children[0].children[0].click();
+const knifePanel = catalogView.ids.inventoryList.children[0].children[2];
+assert.equal(knifePanel.children[0].textContent, "Armas · Ordem Paranormal");
+assert.match(knifePanel.children[1].textContent, /Dano 1d4 de corte/);
+assert.equal(knifePanel.children[2].textContent, knife.description);
+catalogView.ids.inventoryList.children[0].children[1].checked = true;
+catalogView.ids.inventoryList.children[0].children[1].handlers.change();
+assert.equal(catalogView.ids.equippedWeapon.children[0].textContent, "Faca");
+assert.match(catalogView.ids.equippedWeapon.children[1].textContent, /Ordem Paranormal · Armas Simples · Corpo a Corpo · Leve · Categoria 0/);
+const catalogReload = openCharacter(catalogView.saved().characters[0]);
+assert.equal(catalogReload.ids.equippedWeapon.children[0].textContent, "Faca", "a Faca equipada permanece após recarregar");
+assert.equal(catalogReload.saved().characters[0].sheet.inventario[0].damage, "1d4");
+const newWeapons = [
+    { id: "acha", name: "Acha", weaponClass: "Armas Táticas", weaponStyle: "Corpo a Corpo", hands: "Duas Mãos", category: 1, damage: "1d12", damageType: "corte", critical: "x3", space: 2, description: /machado grande e pesado/ },
+    { id: "arco", name: "Arco", weaponClass: "Armas Simples", weaponStyle: "Arma de Disparo", hands: "Duas Mãos", category: 0, range: "médio", damage: "1d6", damageType: "perfuração", critical: "x3", space: 2, ammunition: "Flechas", description: /próprio para tiro ao alvo/ },
+    { id: "arco-composto", name: "Arco Composto", weaponClass: "Armas Táticas", weaponStyle: "Arma de Disparo", hands: "Duas Mãos", category: 1, range: "médio", damage: "1d10", damageType: "perfuração", critical: "x3", space: 2, ammunition: "Flechas", description: /aplique seu valor de Força às rolagens de dano/ },
+    { id: "balestra", name: "Balestra", weaponClass: "Armas Táticas", weaponStyle: "Arma de Disparo", hands: "Duas Mãos", category: 1, range: "médio", damage: "1d12", damageType: "perfuração", critical: 19, space: 2, ammunition: "Flechas", description: /ação de movimento para ser recarregada/ },
+    { id: "bastao", name: "Bastão", weaponClass: "Armas Simples", weaponStyle: "Corpo a Corpo", hands: "Uma Mão", category: 0, damage: "1d6/1d8", damageType: "impacto", critical: "x2", space: 1, description: /com uma mão \(dano 1d6\) ou com as duas \(dano 1d8\)/ },
+    { id: "bazuca", name: "Bazuca", weaponClass: "Armas Pesadas", weaponStyle: "Arma de Fogo", hands: "Duas Mãos", category: 3, range: "médio", damage: "10d8", damageType: "impacto", critical: "x2", space: 2, ammunition: "Foguete", description: /raio de 3m; esses seres/ },
+    { id: "besta", name: "Besta", weaponClass: "Armas Simples", weaponStyle: "Arma de Disparo", hands: "Duas Mãos", category: 0, range: "médio", damage: "1d8", damageType: "perfuração", critical: 19, space: 2, ammunition: "Flechas", description: /arma da antiguidade/ },
+    { id: "cajado", name: "Cajado", weaponClass: "Armas Simples", weaponStyle: "Corpo a Corpo", hands: "Duas Mãos", category: 0, damage: "1d6/1d6", damageType: "impacto", critical: "x2", space: 2, description: /Combater com Duas Armas/ },
+    { id: "corrente", name: "Corrente", weaponClass: "Armas Táticas", weaponStyle: "Corpo a Corpo", hands: "Uma Mão", category: 0, damage: "1d8", damageType: "impacto", critical: "x2", space: 1, description: /fornece \+2 em testes para desarmar e derrubar/ },
+    { id: "espada", name: "Espada", weaponClass: "Armas Táticas", weaponStyle: "Corpo a Corpo", hands: "Uma Mão", category: 1, damage: "1d8/1d10", damageType: "corte", critical: 19, space: 1, description: /com uma mão \(dano 1d8\) ou com as duas \(dano 1d10\)/ },
+    { id: "espingarda", name: "Espingarda", weaponClass: "Armas Táticas", weaponStyle: "Arma de Fogo", hands: "Duas Mãos", category: 1, range: "curto", damage: "4d6", damageType: "balístico", critical: "x3", space: 2, ammunition: "Cartuchos", description: /metade do dano em alcance médio ou maior/ },
+    { id: "florete", name: "Florete", weaponClass: "Armas Táticas", weaponStyle: "Corpo a Corpo", hands: "Uma Mão", category: 1, damage: "1d6", damageType: "corte", critical: 18, space: 1, description: /usada por esgrimistas/ },
+    { id: "fuzil-de-assalto", name: "Fuzil de Assalto", weaponClass: "Armas Táticas", weaponStyle: "Arma de Fogo", hands: "Duas Mãos", category: 2, range: "médio", damage: "2d10", damageType: "balístico", critical: "19/x3", space: 2, ammunition: "Balas Longas", description: /arma automática/ },
+    { id: "fuzil-de-caca", name: "Fuzil de Caça", weaponClass: "Armas Simples", weaponStyle: "Arma de Fogo", hands: "Duas Mãos", category: 1, range: "médio", damage: "2d8", damageType: "balístico", critical: "19/x3", space: 2, ammunition: "Balas Longas", description: /fazendeiros, caçadores e atiradores esportistas/ },
+    { id: "fuzil-de-precisao", name: "Fuzil de Precisão", weaponClass: "Armas Táticas", weaponStyle: "Arma de Fogo", hands: "Duas Mãos", category: 3, range: "longo", damage: "2d10", damageType: "balístico", critical: "19/x3", space: 2, ammunition: "Balas Longas", description: /\+5 na margem de ameaça/ },
+    { id: "gadanho", name: "Gadanho", weaponClass: "Armas Táticas", weaponStyle: "Corpo a Corpo", hands: "Duas Mãos", category: 1, damage: "2d4", damageType: "corte", critical: "x4", space: 2, description: /também pode ceifar vidas/ },
+    { id: "katana", name: "Katana", weaponClass: "Armas Táticas", weaponStyle: "Corpo a Corpo", hands: "Duas Mãos", category: 1, damage: "1d10", damageType: "corte", critical: 19, space: 2, description: /veterano em Luta pode usá-la como uma arma de uma mão/ },
+    { id: "lanca", name: "Lança", weaponClass: "Armas Simples", weaponStyle: "Corpo a Corpo", hands: "Uma Mão", category: 0, range: "curto", damage: "1d6", damageType: "perfuração", critical: "x2", space: 1, description: /Pode ser arremessada/ },
+    { id: "lanca-chamas", name: "Lança-chamas", weaponClass: "Armas Pesadas", weaponStyle: "Arma de Fogo", hands: "Duas Mãos", category: 3, range: "curto", damage: "6d6", damageType: "fogo", critical: "x2", space: 2, ammunition: "Combustível", description: /seres atingidos ficam em chamas/ },
+    { id: "maca", name: "Maça", weaponClass: "Armas Táticas", weaponStyle: "Corpo a Corpo", hands: "Uma Mão", category: 1, damage: "2d4", damageType: "impacto", critical: "x2", space: 1, description: /cabeça metálica cheia de protuberâncias/ },
+    { id: "machadinha", name: "Machadinha", weaponClass: "Armas Táticas", weaponStyle: "Corpo a Corpo", weaponTraits: "Leve", category: 0, range: "curto", damage: "1d6", damageType: "corte", critical: "x3", space: 1, description: /canteiros de obras e fazendas.*Pode ser arremessada/ },
+    { id: "machado", name: "Machado", weaponClass: "Armas Táticas", weaponStyle: "Corpo a Corpo", hands: "Uma Mão", category: 1, damage: "1d8", damageType: "corte", critical: "x3", space: 1, description: /lenhadores e bombeiros/ },
+    { id: "machete", name: "Machete", weaponClass: "Armas Simples", weaponStyle: "Corpo a Corpo", hands: "Uma Mão", category: 0, damage: "1d6", damageType: "corte", critical: 19, space: 1, description: /ferramenta para abrir trilhas/ },
+    { id: "marreta", name: "Marreta", weaponClass: "Armas Táticas", weaponStyle: "Corpo a Corpo", hands: "Duas Mãos", category: 1, damage: "3d4", damageType: "impacto", critical: "x2", space: 2, description: /outras ferramentas de construção civil, como picaretas/ },
+    { id: "martelo", name: "Martelo", weaponClass: "Armas Simples", weaponStyle: "Corpo a Corpo", weaponTraits: "Leve", category: 0, damage: "1d6", damageType: "impacto", critical: "x2", space: 1, description: /na falta de opções melhores/ },
+    { id: "metralhadora", name: "Metralhadora", weaponClass: "Armas Pesadas", weaponStyle: "Arma de Fogo", hands: "Duas Mãos", category: 2, range: "médio", damage: "2d12", damageType: "balístico", critical: "19/x3", space: 2, ammunition: "Balas Longas", description: /Força 4 ou maior.*sofre -5 em seus ataques.*arma automática/ },
+    { id: "montante", name: "Montante", weaponClass: "Armas Táticas", weaponStyle: "Corpo a Corpo", hands: "Duas Mãos", category: 1, damage: "2d6", damageType: "corte", critical: 19, space: 2, description: /espada de 1,5m de comprimento/ },
+    { id: "motosserra", name: "Motosserra", weaponClass: "Armas Táticas", weaponStyle: "Corpo a Corpo", hands: "Duas Mãos", category: 1, damage: "3d6", damageType: "corte", critical: "x2", space: 2, description: /rolar um 6.*-1d20.*ação de movimento/ },
+    { id: "nunchaku", name: "Nunchaku", weaponClass: "Armas Táticas", weaponStyle: "Corpo a Corpo", weaponTraits: "Leve", category: 0, damage: "1d8", damageType: "impacto", critical: "x2", space: 1, description: /bastões curtos de madeira ligados por uma corrente/ },
+    { id: "pistola", name: "Pistola", weaponClass: "Armas Simples", weaponStyle: "Arma de Fogo", weaponTraits: "Leve", category: 1, range: "curto", damage: "1d12", damageType: "balístico", critical: 18, space: 1, ammunition: "Balas Curtas", description: /facilmente recarregável/ },
+    { id: "punhal", name: "Punhal", weaponClass: "Armas Simples", weaponStyle: "Corpo a Corpo", weaponTraits: "Leve", category: 0, damage: "1d4", damageType: "perfuração", critical: "x3", space: 1, description: /usada por cultistas em seus rituais/ },
+    { id: "revolver", name: "Revólver", weaponClass: "Armas Simples", weaponStyle: "Arma de Fogo", weaponTraits: "Leve", category: 1, range: "curto", damage: "2d6", damageType: "balístico", critical: "19/x3", space: 1, ammunition: "Balas Curtas", description: /uma das mais confiáveis/ },
+    { id: "submetralhadora", name: "Submetralhadora", weaponClass: "Armas Táticas", weaponStyle: "Arma de Fogo", hands: "Uma Mão", category: 1, range: "curto", damage: "2d6", damageType: "balístico", critical: "19/x3", space: 1, ammunition: "Balas Curtas", description: /empunhada com apenas uma mão/ }
+];
+const expandedCatalogView = openCharacter(JSON.parse(JSON.stringify(character)));
+for (const expected of newWeapons) {
+    const item = catalog.find((entry) => entry.id === expected.id);
+    assert.ok(item, `${expected.name} existe no catálogo`);
+    for (const field of ["name", "weaponClass", "weaponStyle", "hands", "weaponTraits", "category", "range", "damage", "damageType", "critical", "space", "ammunition"]) {
+        assert.equal(item[field], expected[field], `${expected.name}: ${field}`);
+    }
+    assert.equal(item.group, "Ordem Paranormal");
+    assert.match(item.description, expected.description);
+    expandedCatalogView.ids.openCatalog.click();
+    const row = catalogRow(expandedCatalogView, expected.name);
+    assert.ok(row, `${expected.name} aparece na lista`);
+    assert.equal(row.children[1].hidden, true);
+    row.children[0].click();
+    const details = row.children[1];
+    assert.equal(details.hidden, false);
+    assert.equal(row.children[0].children[1].textContent, `Dano: ${expected.damage}   ·   Crítico: ${expected.critical}`);
+    assert.equal(details.children[0].textContent, [expected.weaponClass, expected.weaponStyle, expected.hands, expected.weaponTraits].filter(Boolean).join(" · "));
+    assert.equal(catalogFact(details, "Categoria"), ["0", "I", "II", "III"][expected.category]);
+    assert.equal(catalogFact(details, "Alcance"), expected.range);
+    assert.equal(catalogFact(details, "Tipo"), expected.damageType);
+    assert.equal(catalogFact(details, "Espaços"), String(expected.space));
+    assert.equal(catalogFact(details, "Munição"), expected.ammunition);
+    assert.equal(details.children[2].textContent, item.description);
+    details.children.at(-1).click();
+    assert.equal(expandedCatalogView.ids.catalogDialog.open, false);
+    const savedWeapon = expandedCatalogView.saved().characters[0].sheet.inventario.find((entry) => entry.catalogId === expected.id);
+    assert.ok(savedWeapon, `${expected.name} foi salvo`);
+    for (const field of ["range", "weaponClass", "weaponStyle", "hands", "weaponTraits", "damage", "damageType", "critical", "space", "ammunition"]) {
+        assert.equal(savedWeapon[field], expected[field], `${expected.name}: ${field} salvo`);
+    }
+    assert.equal(savedWeapon.weaponCategory, expected.category);
+}
+const assaultRow = expandedCatalogView.ids.inventoryList.children.find((row) => row.children[0]?.textContent === "Fuzil de Assalto");
+assaultRow.children[1].checked = true;
+assaultRow.children[1].handlers.change();
+assert.match(expandedCatalogView.ids.equippedWeapon.children[1].textContent, /Crítico 19\/x3/);
+const bazucaRow = expandedCatalogView.ids.inventoryList.children.find((row) => row.children[0]?.textContent === "Bazuca");
+bazucaRow.children[1].checked = true;
+bazucaRow.children[1].handlers.change();
+assert.match(expandedCatalogView.ids.equippedWeapon.children[1].textContent, /Categoria III/);
+assert.match(expandedCatalogView.ids.equippedWeapon.children[1].textContent, /Munição Foguete/);
+assert.equal(openCharacter(expandedCatalogView.saved().characters[0]).ids.equippedWeapon.children[0].textContent, "Bazuca");
+const ammunitionCases = [
+    { id: "balas-curtas", name: "Balas Curtas", category: 0, description: "Munição básica, usada em pistolas, revólveres e submetralhadoras. Um pacote de balas curtas dura duas cenas." },
+    { id: "balas-longas", name: "Balas Longas", category: 1, description: "Maior e mais potente, esta munição é usada em fuzis e metralhadoras. Um pacote de balas longas dura uma cena." },
+    { id: "cartuchos", name: "Cartuchos", category: 1, description: "Usados em espingardas, esses cartuchos são carregados com esferas de chumbo. Um pacote de cartuchos dura uma cena." },
+    { id: "combustivel", name: "Combustível", category: 1, description: "Um tanque de combustível para lança-chamas. Dura uma cena." },
+    { id: "flechas", name: "Flechas", category: 0, description: "Usadas em arcos e bestas, flechas podem ser reaproveitadas após cada combate. Por isso, um pacote de flechas dura uma missão inteira." },
+    { id: "foguete", name: "Foguete", category: 1, description: "Disparado por bazucas. Ao contrário de outras munições, cada foguete dura um único disparo, não uma cena. Para fazer vários ataques, você precisará carregar vários foguetes." }
+];
+const ammunitionView = openCharacter(JSON.parse(JSON.stringify(character)));
+ammunitionView.ids.openCatalog.click();
+catalogCategoryButton(ammunitionView, "Munições").click();
+assert.equal(ammunitionView.ids.catalogGroupTitle.textContent, "Munições · Ordem Paranormal");
+assert.equal(catalogCategoryButton(ammunitionView, "Munições").getAttribute("aria-pressed"), "true");
+assert.equal(ammunitionView.ids.catalogList.children.length, 6);
+assert.equal(catalogRow(ammunitionView, "Faca"), undefined, "armas não aparecem na aba de munições");
+for (const expected of ammunitionCases) {
+    const item = catalog.find((entry) => entry.id === expected.id);
+    assert.ok(item, `${expected.name} existe no catálogo`);
+    assert.equal(item.name, expected.name);
+    assert.equal(item.group, "Ordem Paranormal");
+    assert.equal(item.inventoryCategory, "municoes");
+    assert.equal(item.category, expected.category);
+    assert.equal(item.space, 1);
+    assert.equal(item.description, expected.description);
+    const row = catalogRow(ammunitionView, expected.name);
+    assert.ok(row, `${expected.name} aparece na aba de munições`);
+    assert.equal(row.children[0].children[1].textContent, `Categoria: ${expected.category === 0 ? "0" : "I"}   ·   Espaços: 1`);
+    row.children[0].click();
+    assert.equal(row.children[1].children[0].textContent, "Munições");
+    assert.equal(row.children[1].children[1].textContent, expected.description);
+    row.children[1].children.at(-1).click();
+    assert.equal(ammunitionView.ids.catalogDialog.open, false);
+    const savedAmmunition = ammunitionView.saved().characters[0].sheet.inventario.find((entry) => entry.catalogId === expected.id);
+    assert.equal(savedAmmunition.category, "municoes");
+    assert.equal(savedAmmunition.itemCategory, expected.category);
+    assert.equal(savedAmmunition.space, 1);
+    assert.equal(savedAmmunition.group, "Ordem Paranormal");
+    assert.equal(savedAmmunition.description, expected.description);
+    assert.equal(savedAmmunition.weaponCategory, undefined);
+    assert.equal(savedAmmunition.damage, undefined);
+    const inventoryRow = ammunitionView.ids.inventoryList.children.find((entry) => entry.children[0]?.textContent === expected.name);
+    assert.equal(inventoryRow.children.length, 2, "munições não têm controle de equipar arma");
+    inventoryRow.children[0].click();
+    assert.equal(inventoryRow.children[1].children[0].textContent, "Munições · Ordem Paranormal");
+    assert.equal(inventoryRow.children[1].children[1].textContent, `Categoria ${expected.category === 0 ? "0" : "I"} · Espaço 1`);
+    assert.equal(inventoryRow.children[1].children[2].textContent, expected.description);
+    ammunitionView.ids.openCatalog.click();
+    catalogCategoryButton(ammunitionView, "Munições").click();
+}
+assert.equal(ammunitionView.ids.inventoryList.children.length, 6);
+ammunitionView.inventoryFilters[2].click();
+assert.equal(ammunitionView.ids.inventoryList.children[0].className, "entry-list__empty", "o filtro de armas não mostra munições");
+ammunitionView.inventoryFilters[3].click();
+assert.equal(ammunitionView.ids.inventoryList.children.length, 6, "o filtro de munições mostra os seis pacotes");
+assert.equal(openCharacter(ammunitionView.saved().characters[0]).saved().characters[0].sheet.inventario.length, 6, "as munições permanecem após recarregar");
+catalogCategoryButton(ammunitionView, "Itens amaldiçoados").click();
+assert.equal(ammunitionView.ids.catalogList.children.length, 29);
+catalogCategoryButton(ammunitionView, "Munições").click();
+assert.equal(ammunitionView.ids.catalogList.children.length, 6);
+const protectionCases = [
+    { id: "escudo", name: "Escudo", defense: 2, category: 1, space: 2, description: "Um escudo medieval ou moderno, como aqueles usados por tropas de choque. Para efeitos de proficiência, conta como proteção pesada. Precisa ser empunhado em uma mão e fornece Defesa +2." },
+    { id: "protecao-leve", name: "Proteção Leve", defense: 5, category: 1, space: 2, description: "Jaqueta de couro pesada ou um colete de kevlar. Essa proteção é tipicamente usada por seguranças e policiais." },
+    { id: "protecao-pesada", name: "Proteção Pesada", defense: 10, category: 2, space: 5, description: "Equipamento usado por forças especiais da polícia e pelo exército. Consiste de capacete, ombreiras, joelheiras e caneleiras, além de um colete com várias camadas de kevlar. Fornece resistência a balístico, corte, impacto e perfuração 2. No entanto, por ser desconfortável e volumosa, impõe -5 em testes de perícias que sofrem penalidade de carga." }
+];
+const protectionView = openCharacter(JSON.parse(JSON.stringify(character)));
+protectionView.ids.openCatalog.click();
+catalogCategoryButton(protectionView, "Proteção").click();
+assert.equal(protectionView.ids.catalogGroupTitle.textContent, "Proteção · Ordem Paranormal");
+assert.equal(catalogCategoryButton(protectionView, "Proteção").getAttribute("aria-pressed"), "true");
+assert.equal(protectionView.ids.catalogList.children.length, 3);
+assert.equal(catalogRow(protectionView, "Faca"), undefined, "armas não aparecem na aba de proteção");
+for (const expected of protectionCases) {
+    const item = catalog.find((entry) => entry.id === expected.id);
+    assert.ok(item, `${expected.name} existe no catálogo`);
+    for (const field of ["name", "defense", "category", "space", "description"]) {
+        assert.equal(item[field], expected[field], `${expected.name}: ${field}`);
+    }
+    assert.equal(item.group, "Ordem Paranormal");
+    assert.equal(item.inventoryCategory, "protecao");
+    const row = catalogRow(protectionView, expected.name);
+    assert.ok(row, `${expected.name} aparece na aba de proteção`);
+    assert.equal(row.children[0].children[1].textContent, `Defesa: +${expected.defense}`);
+    row.children[0].click();
+    assert.equal(catalogFact(row.children[1], "Categoria"), ["0", "I", "II"][expected.category]);
+    assert.equal(catalogFact(row.children[1], "Espaços"), String(expected.space));
+    assert.equal(row.children[1].children[1].textContent, expected.description);
+    row.children[1].children.at(-1).click();
+    assert.equal(protectionView.ids.catalogDialog.open, false);
+    const savedProtection = protectionView.saved().characters[0].sheet.inventario.find((entry) => entry.catalogId === expected.id);
+    assert.equal(savedProtection.category, "protecao");
+    assert.equal(savedProtection.defense, expected.defense);
+    assert.equal(savedProtection.itemCategory, expected.category);
+    assert.equal(savedProtection.space, expected.space);
+    assert.equal(savedProtection.group, "Ordem Paranormal");
+    assert.equal(savedProtection.description, expected.description);
+    assert.equal(savedProtection.weaponCategory, undefined);
+    assert.equal(savedProtection.damage, undefined);
+    const inventoryRow = protectionView.ids.inventoryList.children.find((entry) => entry.children[0]?.textContent === expected.name);
+    assert.equal(inventoryRow.children.length, 3, "proteções têm seu próprio controle de equipamento");
+    inventoryRow.children[0].click();
+    assert.equal(inventoryRow.children[2].children[0].textContent, "Proteção · Ordem Paranormal");
+    assert.equal(inventoryRow.children[2].children[1].textContent, `Defesa +${expected.defense} · Categoria ${["0", "I", "II"][expected.category]} · Espaços ${expected.space}`);
+    assert.equal(inventoryRow.children[2].children[2].textContent, expected.description);
+    protectionView.ids.openCatalog.click();
+    catalogCategoryButton(protectionView, "Proteção").click();
+}
+assert.equal(protectionView.ids.inventoryList.children.length, 3);
+protectionView.inventoryFilters[2].click();
+assert.equal(protectionView.ids.inventoryList.children[0].className, "entry-list__empty", "o filtro de armas não mostra proteções");
+protectionView.inventoryFilters[4].click();
+assert.equal(protectionView.ids.inventoryList.children.length, 3, "o filtro de proteção mostra os três itens");
+assert.equal(openCharacter(protectionView.saved().characters[0]).saved().characters[0].sheet.inventario.length, 3, "as proteções permanecem após recarregar");
+const generalCases = [
+    { id: "algemas", name: "Algemas", itemType: "Itens Operacionais", category: 0, space: 1, description: /Acrobacia contra DT 30/ },
+    { id: "amarras-de-elemento", name: "Amarras de (Elemento)", itemType: "Itens Paranormais", category: 2, space: 1, description: /Armadilha\..*\n\nLaçar\./s },
+    { id: "arpeu", name: "Arpéu", itemType: "Itens Operacionais", category: 0, space: 1, description: /Pontaria \(DT 15\).*Atletismo/ },
+    { id: "bandoleira", name: "Bandoleira", itemType: "Itens Operacionais", category: 1, space: 1, description: /sacar ou guardar um item.*ação livre/ },
+    { id: "binoculos", name: "Binóculos", itemType: "Itens Operacionais", category: 0, space: 1, description: /\+5 em testes de Percepção/ },
+    { id: "bloqueador-de-sinal", name: "Bloqueador de Sinal", itemType: "Itens Operacionais", category: 1, space: 1, description: /alcance médio se conecte/ },
+    { id: "camera-de-aura-paranormal", name: "Câmera de Aura Paranormal", itemType: "Itens Paranormais", category: 2, space: 1, description: /auras paranormais.*cor associada ao elemento/ },
+    { id: "cicatrizante", name: "Cicatrizante", itemType: "Itens Operacionais", category: 1, space: 1, description: /curar 2d8\+2 PV/ },
+    { id: "componentes-ritualisticos-de-elemento", name: "Componentes Ritualísticos de (Elemento)", itemType: "Itens Paranormais", category: 0, space: 1, description: /Energia:.*\n\nSangue:.*\n\nMorte:.*\n\nConhecimento:/s },
+    { id: "corda", name: "Corda", itemType: "Itens Operacionais", category: 0, space: 1, description: /10 metros de corda resistente/ },
+    { id: "emissor-de-pulsos-paranormais", name: "Emissor de Pulsos Paranormais", itemType: "Itens Paranormais", category: 2, space: 1, description: /atrai criaturas do mesmo elemento e afasta criaturas do elemento oposto/ },
+    { id: "equipamento-de-sobrevivencia", name: "Equipamento de Sobrevivência", itemType: "Itens Operacionais", category: 0, space: 2, description: /testes de Sobrevivência.*sem treinamento/ },
+    { id: "escuta-de-ruidos-paranormais", name: "Escuta de Ruídos Paranormais", itemType: "Itens Paranormais", category: 2, space: 1, description: /24 horas.*\+5 em testes de Ocultismo/ }
+];
+const generalView = openCharacter(JSON.parse(JSON.stringify(character)));
+generalView.ids.openCatalog.click();
+catalogCategoryButton(generalView, "Geral").click();
+assert.equal(generalView.ids.catalogGroupTitle.textContent, "Geral · Ordem Paranormal");
+assert.equal(catalogCategoryButton(generalView, "Geral").getAttribute("aria-pressed"), "true");
+assert.equal(generalView.ids.catalogList.children.length, 34);
+assert.equal(catalog.find((item) => item.id === "mochila-militar").space, -2, "a mochila preserva os espaços negativos da referência");
+assert.equal(catalogRow(generalView, "Faca"), undefined, "armas não aparecem na aba geral");
+for (const item of catalog.filter((entry) => entry.inventoryCategory === "geral")) {
+    const expected = generalCases.find((entry) => entry.id === item.id) || item;
+    assert.ok(item, `${expected.name} existe no catálogo`);
+    for (const field of ["name", "itemType", "category", "space"]) {
+        assert.equal(item[field], expected[field], `${expected.name}: ${field}`);
+    }
+    assert.equal(item.group, "Ordem Paranormal");
+    assert.equal(item.inventoryCategory, "geral");
+    if (expected.description instanceof RegExp) assert.match(item.description, expected.description);
+    else assert.ok(item.description.trim(), `${item.name} tem uma descrição`);
+    const row = catalogRow(generalView, expected.name);
+    assert.ok(row, `${expected.name} aparece na aba geral`);
+    assert.equal(row.children[0].children[1].textContent, `Categoria: ${["0", "I", "II"][expected.category]}   ·   Espaços: ${expected.space}`);
+    row.children[0].click();
+    assert.equal(row.children[1].children[0].textContent, expected.itemType);
+    assert.equal(row.children[1].children[1].textContent, item.description);
+    row.children[1].children.at(-1).click();
+    assert.equal(generalView.ids.catalogDialog.open, false);
+    const savedItem = generalView.saved().characters[0].sheet.inventario.find((entry) => entry.catalogId === expected.id);
+    assert.equal(savedItem.category, "geral");
+    assert.equal(savedItem.itemType, expected.itemType);
+    assert.equal(savedItem.itemCategory, expected.category);
+    assert.equal(savedItem.space, expected.space);
+    assert.equal(savedItem.group, "Ordem Paranormal");
+    assert.equal(savedItem.description, item.description);
+    const inventoryRow = generalView.ids.inventoryList.children.find((entry) => entry.children[0]?.textContent === expected.name);
+    assert.equal(inventoryRow.children.length, 2, "itens gerais não têm controle de equipar arma");
+    inventoryRow.children[0].click();
+    assert.equal(inventoryRow.children[1].children[0].textContent, "Geral · Ordem Paranormal");
+    assert.equal(inventoryRow.children[1].children[1].textContent, `${expected.itemType} · Categoria ${["0", "I", "II"][expected.category]} · Espaços ${expected.space}`);
+    assert.equal(inventoryRow.children[1].children[2].textContent, item.description);
+    generalView.ids.openCatalog.click();
+    catalogCategoryButton(generalView, "Geral").click();
+}
+assert.equal(generalView.ids.inventoryList.children.length, 34);
+generalView.inventoryFilters[2].click();
+assert.equal(generalView.ids.inventoryList.children[0].className, "entry-list__empty", "o filtro de armas não mostra itens gerais");
+generalView.inventoryFilters[5].click();
+assert.equal(generalView.ids.inventoryList.children.length, 34, "o filtro geral mostra os 34 itens");
+const reloadedGeneralItems = openCharacter(generalView.saved().characters[0]).saved().characters[0].sheet.inventario;
+assert.equal(reloadedGeneralItems.length, 34, "os itens gerais permanecem após recarregar");
+assert.equal(reloadedGeneralItems.find((item) => item.catalogId === "mochila-militar").space, -2, "os espaços negativos permanecem após salvar e recarregar");
+const cursedItems = catalog.filter((item) => item.inventoryCategory === "amaldicoados");
+const cursedView = openCharacter(JSON.parse(JSON.stringify(character)));
+cursedView.ids.openCatalog.click();
+catalogCategoryButton(cursedView, "Itens amaldiçoados").click();
+assert.equal(cursedView.ids.catalogGroupTitle.textContent, "Itens amaldiçoados · Ordem Paranormal");
+assert.equal(catalogCategoryButton(cursedView, "Itens amaldiçoados").getAttribute("aria-pressed"), "true");
+assert.equal(cursedView.ids.catalogList.children.length, 29);
+assert.equal(cursedItems.find((item) => item.id === "jaqueta-de-verissimo").category, 4);
+assert.equal(cursedItems.find((item) => item.id === "jaqueta-de-verissimo").element, "Medo");
+assert.equal(cursedItems.find((item) => item.id === "dedo-decepado").element, "Varia");
+for (const item of cursedItems) {
+    const row = catalogRow(cursedView, item.name);
+    assert.ok(row, `${item.name} aparece no catálogo de itens amaldiçoados`);
+    assert.equal(row.children[0].children[1].textContent, `Categoria: ${["0", "I", "II", "III", "IV"][item.category]}   ·   Espaços: ${item.space}`);
+    row.children[0].click();
+    assert.equal(row.children[1].children[0].textContent, item.element);
+    assert.equal(row.children[1].children[1].textContent, item.description);
+    row.children[1].children.at(-1).click();
+    assert.equal(cursedView.ids.catalogDialog.open, false);
+    const savedItem = cursedView.saved().characters[0].sheet.inventario.find((entry) => entry.catalogId === item.id);
+    assert.equal(savedItem.category, "amaldicoados");
+    assert.equal(savedItem.element, item.element);
+    assert.equal(savedItem.itemCategory, item.category);
+    assert.equal(savedItem.space, item.space);
+    assert.equal(savedItem.description, item.description);
+    const inventoryRow = cursedView.ids.inventoryList.children.find((entry) => entry.children[0]?.textContent === item.name);
+    assert.equal(inventoryRow.children.length, 2);
+    assert.equal(inventoryRow.children[1].children[1].textContent, `${item.element} · Categoria ${["0", "I", "II", "III", "IV"][item.category]} · Espaços ${item.space}`);
+    cursedView.ids.openCatalog.click();
+    catalogCategoryButton(cursedView, "Itens amaldiçoados").click();
+}
+cursedView.inventoryFilters[2].click();
+assert.equal(cursedView.ids.inventoryList.children[0].className, "entry-list__empty");
+cursedView.inventoryFilters[6].click();
+assert.equal(cursedView.ids.inventoryList.children.length, 29);
+const cursedReload = openCharacter(cursedView.saved().characters[0]);
+assert.equal(JSON.stringify(cursedReload.saved().characters[0].sheet.inventario), JSON.stringify(cursedView.saved().characters[0].sheet.inventario), "elementos e dados dos itens amaldiçoados permanecem após recarregar");
+const multiCatalogView = openCharacter(JSON.parse(JSON.stringify(character)), {
+    catalogCollections: [{ name: "Livro futuro", cover: null }],
+    catalogItems: [
+        { ...knife, id: "segunda-faca", name: "Segunda faca" },
+        { ...knife, id: "outro-item", group: "Outro livro", name: "Outro item" }
+    ]
+});
+multiCatalogView.ids.openCatalog.click();
+assert.equal(multiCatalogView.ids.catalogCollections.children.length, 3, "novas coleções aparecem ao lado da primeira");
+assert.equal(multiCatalogView.ids.catalogList.children.length, 35);
+catalogRow(multiCatalogView, "Faca").children[0].click();
+catalogRow(multiCatalogView, "Segunda faca").children[0].click();
+assert.equal(catalogRow(multiCatalogView, "Faca").children[1].hidden, true, "abrir outro item fecha o anterior");
+assert.equal(catalogRow(multiCatalogView, "Segunda faca").children[1].hidden, false);
+multiCatalogView.ids.catalogCollections.children[1].click();
+assert.equal(multiCatalogView.ids.catalogCollections.children[0].getAttribute("aria-pressed"), "false");
+assert.equal(multiCatalogView.ids.catalogCollections.children[1].getAttribute("aria-pressed"), "true");
+assert.equal(multiCatalogView.ids.catalogGroupTitle.textContent, "Armas · Livro futuro");
+assert.equal(multiCatalogView.ids.catalogList.children[0].textContent, "Nenhum item nesta categoria ainda.");
+multiCatalogView.ids.catalogCollections.children[2].click();
+assert.equal(multiCatalogView.ids.catalogGroupTitle.textContent, "Armas · Outro livro");
+assert.equal(multiCatalogView.ids.catalogList.children[0].children[0].children[0].textContent, "Outro item");
 
 addEntryButtons[1].click();
 assert.equal(ids.entryDialog.open, true);
@@ -315,6 +787,7 @@ ids.entryCategory.value = "armas";
 ids.entryDescription.value = "Ainda sem dano definido.";
 ids.entryForm.handlers.submit({ preventDefault() {} });
 assert.equal(saved().characters[0].sheet.inventario[0].category, "armas");
+assert.equal(saved().characters[0].sheet.inventario[0].catalogId, undefined, "item criado manualmente não herda dados do catálogo");
 assert.equal(ids.inventoryList.children[0].tag, "article");
 const weaponRow = ids.inventoryList.children[0];
 assert.equal(weaponRow.children[0].textContent, "Revólver");
@@ -357,7 +830,7 @@ assert.equal(ids.inventoryList.children[0].dataset.equipped, "false");
 assert.equal(ids.inventoryList.children[1].dataset.equipped, "true");
 assert.equal(ids.inventoryList.children[0].children[1].checked, false);
 assert.equal(ids.inventoryList.children[1].children[1].checked, true);
-inventoryFilters[3].click();
+inventoryFilters[4].click();
 assert.equal(ids.inventoryList.children[0].className, "entry-list__empty");
 inventoryFilters[2].click();
 assert.equal(ids.inventoryList.children.length, 2, "o filtro de armas preserva os itens salvos");
@@ -617,10 +1090,11 @@ const legacy = openCharacter({ id: "antigo", name: "Antigo", role: "Investigador
 assert.equal(legacy.ids.characterOrigin.textContent, "Criminoso");
 assert.equal(legacy.ids.abilitiesList.children[0].children[0].textContent, "O Crime Compensa", "fichas antigas também recebem a habilidade da origem");
 assert.equal(legacy.ids.attributeWheelImage.src, "assets/atributos-indefinido.png");
-assert.equal(legacy.ids.attributeList.children[0].children[1].textContent, "—", "valores desconhecidos não são inventados");
+assert.equal(legacy.ids.attributeWheelValues.children[0].children[0].textContent, "—", "valores desconhecidos não são inventados");
+assert.equal(legacy.ids.attributeWheelValues.children[0].getAttribute("aria-label"), "Agilidade: não informado");
 assert.equal(legacy.ids.characterAppearance.classes["is-empty"], true);
 legacy.ids.skillsBody.children[6].children[0].children[0].children[0].click();
-assert.match(legacy.ids.skillRollResult.getAttribute("aria-label"), /atributo de Crime ainda não tem um valor salvo/, "valor de atributo ausente continua gerando uma mensagem útil");
+assert.match(legacy.ids.skillRollResult.getAttribute("aria-label"), /atributo de Crime ainda não tem um valor válido/, "valor de atributo ausente continua gerando uma mensagem útil");
 
 const missing = openCharacter(null);
 assert.equal(missing.ids.missingCharacter.hidden, false);
@@ -631,6 +1105,7 @@ assert.match(fs.readFileSync(path.join(root, "ficha.js"), "utf8"), /if \(persist
 const css = fs.readFileSync(path.join(root, "personagem.css"), "utf8");
 const html = fs.readFileSync(path.join(root, "personagem.html"), "utf8");
 assert.equal((html.match(/data-sheet-tab=/g) || []).length, 8);
+assert.deepEqual([...html.matchAll(/data-sheet-tab="([^"]+)"/g)].map((match) => match[1]), ["informacoes", "atributos", "pericias", "combate", "inventario", "habilidades", "rituais", "descricoes"]);
 assert.match(html, /id="sheetTabs" class="sheet-tabs"/);
 assert.match(html, /data-description-tab="anotacoes"/);
 assert.match(html, /data-add-shape="triangle"/);
@@ -641,12 +1116,27 @@ assert.match(html, /id="vidaCurrent"/);
 assert.match(html, /id="esforcoCurrent"/);
 assert.match(html, /id="sanidadeCurrent"/);
 assert.match(html, /id="ritualDifficulty"/);
+assert.match(html, /<details class="attribute-more">[\s\S]*?<summary>Defesa, proteção e ajustes<\/summary>/);
+assert.match(html, /id="toggleAttributeEdit"[^>]*aria-label="Editar atributos"[^>]*aria-pressed="false"/);
+assert.match(html, /id="attributeEditHint"[^>]*hidden/);
+assert.doesNotMatch(html, /id="attributeList"/, "a lista duplicada de atributos foi removida");
 assert.match(html, /<script src="nex-rules\.js\?v=[^"]+"><\/script>/);
 assert.ok(html.indexOf('id="skillRollResult"') > html.indexOf("</main>"), "resultado flutuante fica fora da aba que pode ser escondida");
 assert.match(html, /id="skillRollResult"[^>]*hidden/);
 assert.match(html, /Marcador de treino \(não bloqueia rolagens\)/);
 for (const id of ["inventoryList", "abilitiesList", "ritualsList"]) assert.match(html, new RegExp(`id="${id}" class="entry-list entry-list--accordion"`));
 assert.match(html, /<script src="origins\.js\?v=[^"]+"><\/script>/);
+assert.match(html, /<script src="equipment-catalog\.js\?v=[^"]+"><\/script>/);
+assert.match(html, /data-add-entry="inventario">Criar item<\/button>/);
+assert.match(html, /id="openCatalog"[^>]*>Adicionar item<\/button>/);
+assert.match(html, /id="catalogDialog"[^>]*aria-labelledby="catalogDialogTitle"/);
+assert.match(html, /id="catalogCollections" class="catalog-collections"/);
+assert.match(html, /id="catalogCategories" class="catalog-categories"/);
+assert.match(html, /data-inventory-filter="municoes">Munições<\/button>/);
+assert.match(html, /<option value="municoes">Munições<\/option>/);
+assert.ok(html.indexOf('id="catalogCollections"') < html.indexOf('id="catalogList"'), "as caixas ficam acima dos itens");
+assert.doesNotMatch(html, /id="backCatalog"/, "não há segunda tela nem botão de voltar");
+assert.doesNotMatch(html, /id="entryWeapon"/, "o catálogo não fica no formulário manual");
 assert.match(css, /\.entry-list article\.entry-item \{[^}]*background:[^;]*#2d2d32/);
 assert.match(css, /\.entry-list article\.entry-item\.entry-list__origin \{ border-left: 3px solid var\(--accent\)/);
 assert.match(css, /\.entry-item__equip-check \{[^}]*width: 44px; height: 44px/);
@@ -655,9 +1145,147 @@ assert.match(css, /\.roll-result__more:hover \.roll-result__tooltip, \.roll-resu
 assert.match(css, /\.entry-item__toggle--weapon::after \{[^}]*right: 21px/);
 assert.match(css, /\.entry-item__equip-check \{[^}]*right: 51px/);
 assert.match(css, /@media \(max-width: 850px\)/);
-assert.match(css, /@media \(min-width: 1100px\)/);
-assert.match(css, /@media \(min-width: 1500px\)/);
-assert.match(css, /#panel-pericias \{ grid-column: 2; grid-row: 2 \/ span 2;/);
+assert.match(css, /\.attribute-wheel__value \{[^}]*width: max\(25%, 44px\); height: max\(25%, 44px\)/);
+assert.match(css, /@media \(min-width: 900px\)/);
+assert.match(css, /\.view-layout \{[^}]*height: calc\(100dvh - 56px\)/);
+assert.match(css, /#panel-atributos \{ grid-column: 1; grid-row: 2 \/ span 2;/);
+assert.match(css, /#panel-informacoes, #panel-descricoes, #panel-pericias, #panel-combate, #panel-inventario, #panel-habilidades, #panel-rituais \{ grid-column: 2; grid-row: 3;/);
 assert.match(css, /@media \(max-width: 620px\)/);
 assert.match(css, /overflow-x: clip/);
-console.log("Ficha desktop e celular: NEX, recursos, perícias, atributos, equipamento e salvamento: OK");
+function descendants(node) { return [node, ...node.children.flatMap(descendants)]; }
+function combatControl(view, key, setting = false) {
+    return descendants(view.ids.equippedWeapon).find((node) => node.dataset[setting ? "combatSetting" : "combatAction"] === key);
+}
+function inventoryEquipment(view, name, checked) {
+    const row = view.ids.inventoryList.children.find((node) => node.children[0]?.textContent === name);
+    row.children[1].checked = checked;
+    row.children[1].handlers.change();
+}
+const combatCharacter = {
+    ...character, attributes: { ...character.attributes, forca: 2 },
+    sheet: {
+        originSkillChoices: ["luta", "fortitude"],
+        skills: { luta: { training: 0, other: 1 }, fortitude: { training: 0, other: 2 }, reflexos: { training: 10, other: 1 }, furtividade: { training: 5, other: 1 } },
+        inventario: [
+            { id: "knife", catalogId: "faca", category: "armas", name: "Faca", weaponStyle: "Corpo a Corpo", damage: "1d4", critical: 19 },
+            { id: "axe", catalogId: "acha", category: "armas", name: "Acha", hands: "Duas Mãos", damage: "1d12", critical: "x3" },
+            { id: "heavy", catalogId: "protecao-pesada", category: "protecao", name: "Proteção Pesada", defense: 10 },
+            { id: "light", catalogId: "protecao-leve", category: "protecao", name: "Proteção Leve", defense: 5 },
+            { id: "shield", catalogId: "escudo", category: "protecao", name: "Escudo", defense: 2 }
+        ]
+    }
+};
+const combatView = openCharacter(combatCharacter, { dice: [20] });
+assert.equal(combatView.ids.defenseValue.textContent, "14");
+assert.equal(combatView.ids.blockValue.textContent, "7", "bloqueio inclui treino da origem e outros bônus de Fortitude");
+assert.equal(combatView.ids.dodgeValue.textContent, "25");
+inventoryEquipment(combatView, "Faca", true);
+combatControl(combatView, "attack").click();
+assert.match(combatView.ids.skillRollResult.getAttribute("aria-label"), /2d20.*Bônus: \+6. Total: 26.*Ameaça de crítico/);
+combatControl(combatView, "damage").click();
+assert.match(combatView.ids.skillRollResult.getAttribute("aria-label"), /1d4: 4.*Total: 6/);
+combatControl(combatView, "critical").click();
+assert.match(combatView.ids.skillRollResult.getAttribute("aria-label"), /2d4: 4, 4.*Total: 10/);
+function changeWeaponSetting(key, value) {
+    const field = combatControl(combatView, key, true);
+    field.value = value;
+    field.handlers.change();
+}
+changeWeaponSetting("attribute", "agilidade");
+changeWeaponSetting("damage", "1d4+2");
+changeWeaponSetting("critical", "19/x3");
+changeWeaponSetting("damageBonus", "3");
+changeWeaponSetting("extraDamage", "1d6+1");
+combatControl(combatView, "critical").click();
+assert.match(combatView.ids.skillRollResult.getAttribute("aria-label"), /3d4: 4, 4, 4.*extra 1d6: 6.*bônus fixo \+8.*Total: 26/);
+const lutaRow = combatView.ids.skillsBody.children.find((node) => node.children[0].children[0].children[1].textContent === "Luta");
+lutaRow.children[4].children[0].value = "4";
+lutaRow.children[4].children[0].handlers.change();
+combatControl(combatView, "attack").click();
+assert.match(combatView.ids.skillRollResult.getAttribute("aria-label"), /4d20.*Bônus: \+9. Total: 29/, "o ataque acompanha a perícia após ler os valores várias vezes");
+inventoryEquipment(combatView, "Proteção Pesada", true);
+inventoryEquipment(combatView, "Escudo", true);
+assert.equal(combatView.ids.defenseValue.textContent, "26");
+assert.equal(combatView.ids.dodgeValue.textContent, "37");
+assert.match(combatView.ids.resistanceValue.textContent, /perfuração 2/);
+const stealthRow = combatView.ids.skillsBody.children.find((node) => node.children[0].children[0].children[1].textContent === "Furtividade");
+assert.equal(stealthRow.children[2].children[0].textContent, "+1");
+stealthRow.children[0].children[0].children[0].click();
+assert.match(combatView.ids.skillRollResult.getAttribute("aria-label"), /Bônus: \+1. Total: 21/);
+inventoryEquipment(combatView, "Acha", true);
+assert.equal(combatView.saved().characters[0].sheet.equippedWeaponId, "knife", "conflito de mãos não troca a arma");
+assert.match(combatView.ids.equipmentMessage.textContent, /duas mãos e escudo/);
+inventoryEquipment(combatView, "Proteção Leve", true);
+assert.equal(combatView.ids.defenseValue.textContent, "21", "uma proteção substitui outra sem somar ambas");
+assert.equal(combatView.ids.resistanceValue.textContent, "Nenhuma registrada");
+combatView.ids.defenseBonus.value = "3";
+combatView.ids.defenseBonus.handlers.change();
+assert.equal(combatView.ids.defenseValue.textContent, "24");
+const combatReload = openCharacter(combatView.saved().characters[0], { dice: [20] });
+assert.equal(combatReload.ids.defenseValue.textContent, "24");
+combatControl(combatReload, "critical").click();
+assert.match(combatReload.ids.skillRollResult.getAttribute("aria-label"), /Total: 26/, "configuração de dano e crítico persiste");
+const combatAttributes = openCharacter(combatView.saved().characters[0], { dice: [20, 1] });
+combatAttributes.ids.toggleAttributeEdit.click();
+const combatAgi = combatAttributes.ids.attributeWheelValues.children[0];
+combatAgi.children[1].click();
+combatAgi.children[2].value = "0";
+combatAgi.children[2].handlers.change();
+assert.equal(combatAttributes.ids.defenseValue.textContent, "20", "a Defesa acompanha a Agilidade editada");
+combatControl(combatAttributes, "attack").click();
+assert.match(combatAttributes.ids.skillRollResult.getAttribute("aria-label"), /2d20: 20, 1. Menor dado: 1.*Total: 10/);
+const combatForce = combatAttributes.ids.attributeWheelValues.children[1];
+combatForce.children[1].click();
+combatForce.children[2].value = "3";
+combatForce.children[2].handlers.change();
+assert.equal(combatAttributes.saved().characters[0].attributes.forca, 3);
+assert.equal(combatControl(combatAttributes, "damageAttribute", true).value, "forca");
+const malformedDamage = combatControl(combatAttributes, "damage", true);
+malformedDamage.value = "2d6+alert(1)";
+malformedDamage.handlers.change();
+combatControl(combatAttributes, "damage").click();
+assert.match(combatAttributes.ids.skillRollResult.getAttribute("aria-label"), /Configure o dano/, "expressões inválidas não são executadas");
+const lightRow = combatReload.ids.inventoryList.children.find((node) => node.children[0]?.textContent === "Proteção Leve");
+lightRow.children[2].children.at(-1).click();
+assert.equal(combatReload.ids.defenseValue.textContent, "19", "remover proteção recalcula Defesa e mantém o escudo");
+assert.equal(combatReload.saved().characters[0].sheet.equippedArmorId, null);
+inventoryEquipment(combatReload, "Escudo", false);
+inventoryEquipment(combatReload, "Acha", true);
+assert.equal(combatReload.saved().characters[0].sheet.equippedWeaponId, "axe");
+inventoryEquipment(combatReload, "Escudo", true);
+assert.equal(combatReload.saved().characters[0].sheet.equippedShieldId, null, "conflito também é validado ao equipar escudo");
+const failingOptions = { failStorage: true };
+const failingCombat = openCharacter({ ...character, sheet: { inventario: [{ category: "protecao", name: "Colete antigo", defense: 5 }] } }, failingOptions);
+inventoryEquipment(failingCombat, "Colete antigo", true);
+assert.equal(failingCombat.ids.defenseValue.textContent, "14");
+assert.equal(failingCombat.saved().characters[0].sheet.inventario[0].id, undefined, "falha no salvamento desfaz o ID gerado");
+failingOptions.failStorage = false;
+inventoryEquipment(failingCombat, "Colete antigo", true);
+assert.equal(failingCombat.ids.defenseValue.textContent, "19");
+failingOptions.failStorage = true;
+inventoryEquipment(failingCombat, "Colete antigo", false);
+assert.equal(failingCombat.ids.defenseValue.textContent, "19", "falha ao desequipar preserva o equipamento");
+failingCombat.ids.inventoryList.children[0].children[2].children.at(-1).click();
+assert.equal(failingCombat.ids.defenseValue.textContent, "19");
+assert.equal(failingCombat.saved().characters[0].sheet.inventario.length, 1, "falha na remoção preserva o item");
+const variantView = openCharacter({ ...character, sheet: { equippedWeaponId: "staff", inventario: [{ id: "staff", catalogId: "bastao", name: "Bastão", category: "armas", hands: "Uma Mão", damage: "1d6/1d8", critical: "x2" }] } }, { dice: [20] });
+combatControl(variantView, "damage").click();
+assert.match(variantView.ids.skillRollResult.getAttribute("aria-label"), /1d6: 6.*Total: 7/);
+const handsField = combatControl(variantView, "hands", true);
+handsField.value = "two";
+handsField.handlers.change();
+assert.equal(combatControl(variantView, "damage", true).value, "1d8");
+combatControl(variantView, "damage").click();
+assert.match(variantView.ids.skillRollResult.getAttribute("aria-label"), /1d8: 8.*Total: 9/);
+const conflictingKatana = openCharacter({ ...character, sheet: {
+    equippedWeaponId: "katana", equippedShieldId: "shield", skills: { luta: { training: 10 } },
+    inventario: [{ id: "katana", catalogId: "katana", category: "armas", name: "Katana", hands: "Duas Mãos", damage: "1d10" }, { id: "shield", catalogId: "escudo", name: "Escudo", category: "protecao", defense: 2 }]
+} });
+assert.equal(conflictingKatana.ids.defenseValue.textContent, "16", "Katana permite uma mão com treino veterano em Luta");
+const katanaTraining = conflictingKatana.ids.skillsBody.children[15].children[3].children[0];
+katanaTraining.value = "5";
+katanaTraining.handlers.change();
+assert.equal(conflictingKatana.ids.defenseValue.textContent, "14", "perder a condição de uma mão suspende o bônus do escudo");
+combatControl(conflictingKatana, "attack").click();
+assert.match(conflictingKatana.ids.skillRollResult.getAttribute("aria-label"), /Corrija o equipamento/);
+console.log("Ficha desktop e celular: NEX, recursos, perícias, atributos, equipamento, combate e salvamento: OK");

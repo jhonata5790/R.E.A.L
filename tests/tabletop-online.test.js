@@ -46,18 +46,55 @@ assert.match(edgeCode, /SUPABASE_SECRET_KEYS/);
 assert.match(configCode, /sb_publishable_/);
 assert.doesNotMatch(configCode, /sb_secret_|SERVICE_ROLE/i);
 
+function guestDocumentUi() {
+    const dialog = { open: false, style: {}, handlers: {}, addEventListener(name, fn) { this.handlers[name] = fn; },
+        getBoundingClientRect() {
+            const left = Number.parseFloat(this.style.left) || 20;
+            const top = Number.parseFloat(this.style.top) || 80;
+            const width = Number.parseFloat(this.style.width) || 440;
+            const height = Number.parseFloat(this.style.height) || 340;
+            return { left, top, width, height, right: left + width, bottom: top + height };
+        },
+        show() { this.open = true; }, close() { this.open = false; } };
+    const content = { get clientWidth() { return dialog.getBoundingClientRect().width - 36; },
+        get clientHeight() { return dialog.getBoundingClientRect().height - 115; } };
+    const text = { textContent: "", hidden: true, style: {},
+        get scrollWidth() {
+            const width = content.clientWidth;
+            const capacity = Math.max(1, Math.floor(content.clientHeight / 23) * Math.floor(width / 8));
+            return Math.max(1, Math.ceil(this.textContent.length / capacity)) * width;
+        } };
+    const button = () => ({ hidden: true, disabled: false, handlers: {}, addEventListener(name, fn) { this.handlers[name] = fn; } });
+    const handles = ["n", "e", "s", "w", "ne", "se", "sw", "nw"].map((edge) => ({
+        dataset: { documentResize: edge }, handlers: {},
+        addEventListener(name, fn) { this.handlers[name] = fn; }, setPointerCapture() {}
+    }));
+    return { handles, ids: {
+        guestDocumentOpen: button(), guestDocument: dialog,
+        guestDocumentHandle: { handlers: {}, addEventListener(name, fn) { this.handlers[name] = fn; }, setPointerCapture() {} },
+        guestDocumentClose: button(), guestDocumentContent: content,
+        guestDocumentTitle: { textContent: "" }, guestDocumentText: text,
+        guestDocumentPages: { hidden: true }, guestDocumentPageStatus: { textContent: "" },
+        guestDocumentPrevious: button(), guestDocumentNext: button(),
+        guestDocumentImage: { hidden: true, src: "", removeAttribute() { this.src = ""; } }
+    } };
+}
+
 async function runGuest(hash, response, visitorName) {
+    const ui = guestDocumentUi();
     const ids = {
         guestStatus: { textContent: "" },
         guestFrame: { hidden: true, src: "", removeAttribute(name) { if (name === "src") this.src = ""; } },
         guestVideo: { hidden: true, srcObject: null, addEventListener() {} },
-        guestWaiting: { hidden: false }
+        guestWaiting: { hidden: false },
+        ...ui.ids
     };
     const calls = [];
     const context = {
-        document: { visibilityState: "visible", getElementById: (id) => ids[id], addEventListener() {} },
+        document: { visibilityState: "visible", getElementById: (id) => ids[id],
+            querySelectorAll: () => ui.handles, addEventListener() {} },
         location: { hash },
-        window: { REAL_SUPABASE_CONFIG: { url: "https://example.supabase.co", publishableKey: "sb_publishable_test" },
+        window: { innerWidth: 1200, innerHeight: 800, REAL_SUPABASE_CONFIG: { url: "https://example.supabase.co", publishableKey: "sb_publishable_test" },
             REAL_VISITOR_NAME: visitorName === undefined ? undefined : { getName: () => visitorName, ready: new Promise(() => {}) },
             addEventListener() {} },
         crypto: { randomUUID: () => "11111111-2222-4333-8444-555555555555" },
@@ -99,11 +136,11 @@ async function runMaster() {
     };
     const context = {
         document: { getElementById: (id) => ids[id], createElement: () => ({ textContent: "" }) },
-        window: { REAL_SUPABASE_CONFIG: { url: "https://example.supabase.co", publishableKey: "sb_publishable_test" },
+        window: { innerWidth: 1200, innerHeight: 800, REAL_SUPABASE_CONFIG: { url: "https://example.supabase.co", publishableKey: "sb_publishable_test" },
             REAL_TABLETOP_MASTER: { ready: Promise.resolve(), campaignKey: "autosave", capturePlayerFrame: () => "data:image/jpeg;base64,abc" },
-            supabase: { createClient: () => client }, addEventListener(name, fn) { handlers[`window:${name}`] = fn; } },
+            supabase: { createClient: () => client }, addEventListener(name, fn) { handlers[`window:${name}`] = fn; }, dispatchEvent() {} },
         location: { href: "https://example.test/mesa.html", protocol: "https:" },
-        URL, URLSearchParams, setTimeout, clearTimeout, navigator: { clipboard: { writeText: async () => {} } }
+        URL, URLSearchParams, setTimeout, clearTimeout, Event, navigator: { clipboard: { writeText: async () => {} } }
     };
     vm.runInNewContext(masterCode, context);
     await new Promise((resolve) => setImmediate(resolve));
@@ -129,12 +166,14 @@ async function runLive() {
     const track = { stopped: false, stop() { this.stopped = true; } };
     const stream = { getTracks: () => [track] };
     const videoHandlers = {};
+    const ui = guestDocumentUi();
     const guestIds = {
         guestStatus: { textContent: "" },
         guestFrame: { hidden: true, src: "", removeAttribute() { this.src = ""; } },
         guestVideo: { hidden: true, srcObject: null, addEventListener(name, fn) { videoHandlers[name] = fn; },
             play() { videoHandlers.playing(); return Promise.resolve(); } },
-        guestWaiting: { hidden: false }
+        guestWaiting: { hidden: false },
+        ...ui.ids
     };
     const masterIds = Object.fromEntries([
         "onlineStatus", "onlineAuthForm", "onlineMasterControls", "onlineToggle", "onlineInvite",
@@ -202,15 +241,15 @@ async function runLive() {
     const shared = {
         RTCPeerConnection: FakePeerConnection,
         crypto: { randomUUID: () => ids.shift() || "cccccccc-cccc-4ccc-8ccc-cccccccccccc" },
-        URL, URLSearchParams, setTimeout, clearTimeout, setInterval() {}
+        URL, URLSearchParams, Event, setTimeout, clearTimeout, setInterval() {}
     };
     const masterContext = {
         ...shared,
         document: { getElementById: (id) => masterIds[id], createElement: () => ({ textContent: "" }) },
-        window: { REAL_SUPABASE_CONFIG: { url: "https://example.supabase.co", publishableKey: "sb_publishable_test" },
+        window: { innerWidth: 1200, innerHeight: 800, REAL_SUPABASE_CONFIG: { url: "https://example.supabase.co", publishableKey: "sb_publishable_test" },
             REAL_TABLETOP_MASTER: { ready: Promise.resolve(), campaignKey: "autosave", startPlayerStream: () => stream,
                 stopPlayerStream: () => track.stop(), capturePlayerFrame: () => "data:image/jpeg;base64,abc" },
-            supabase: { createClient }, addEventListener() {} },
+            supabase: { createClient }, addEventListener() {}, dispatchEvent() {} },
         location: { href: "https://example.test/mesa.html", protocol: "https:" },
         navigator: { clipboard: { writeText: async () => {} } }
     };
@@ -218,8 +257,9 @@ async function runLive() {
     await new Promise((resolve) => setImmediate(resolve));
     const guestContext = {
         ...shared,
-        document: { visibilityState: "visible", getElementById: (id) => guestIds[id], addEventListener() {} },
-        window: { REAL_SUPABASE_CONFIG: { url: "https://example.supabase.co", publishableKey: "sb_publishable_test" },
+        document: { visibilityState: "visible", getElementById: (id) => guestIds[id],
+            querySelectorAll: () => ui.handles, addEventListener() {} },
+        window: { innerWidth: 1200, innerHeight: 800, REAL_SUPABASE_CONFIG: { url: "https://example.supabase.co", publishableKey: "sb_publishable_test" },
             REAL_VISITOR_NAME: { getName: () => visitorName, ready: Promise.resolve("Jhonata") },
             supabase: { createClient }, addEventListener(name, fn) { guestEvents[name] = fn; } },
         location: { hash: `#convite=${code}` },
@@ -241,6 +281,58 @@ async function runLive() {
     assert.equal(guestIds.guestVideo.srcObject, stream);
     assert.equal(guestIds.guestVideo.hidden, false);
     assert.equal(guestIds.guestFrame.hidden, true);
+    assert.ok(signals.some((message) => message.event === "document-request"));
+    assert.equal(await masterContext.window.REAL_TABLETOP_ONLINE.sendDocument({ kind: "show",
+        document: { id: "clue-1", title: "Carta", kind: "text", text: "Encontre a chave." } }), true);
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(guestIds.guestDocument.open, true);
+    assert.equal(guestIds.guestDocumentOpen.hidden, true);
+    assert.equal(guestIds.guestDocumentTitle.textContent, "Carta");
+    assert.equal(guestIds.guestDocumentText.textContent, "Encontre a chave.");
+    const dragEdge = (edge, dx, dy) => {
+        const handle = ui.handles.find((entry) => entry.dataset.documentResize === edge);
+        handle.handlers.pointerdown({ button: 0, pointerId: 7, clientX: 100, clientY: 100, preventDefault() {} });
+        handle.handlers.pointermove({ pointerId: 7, clientX: 100 + dx, clientY: 100 + dy });
+        handle.handlers.pointerup();
+    };
+    dragEdge("e", 60, 0);
+    assert.equal(guestIds.guestDocument.style.width, "500px");
+    dragEdge("w", 60, 0);
+    assert.equal(guestIds.guestDocument.style.left, "80px");
+    assert.equal(guestIds.guestDocument.style.width, "440px");
+    dragEdge("n", 0, 30);
+    assert.equal(guestIds.guestDocument.style.top, "110px");
+    assert.equal(guestIds.guestDocument.style.height, "310px");
+    dragEdge("s", 0, 60);
+    assert.equal(guestIds.guestDocument.style.height, "370px");
+    dragEdge("se", 40, 40);
+    assert.equal(guestIds.guestDocument.style.width, "480px");
+    assert.equal(guestIds.guestDocument.style.height, "410px");
+    guestIds.guestDocumentHandle.handlers.pointerdown({ button: 0, pointerId: 1, clientX: 40, clientY: 100,
+        target: { closest: () => null } });
+    guestIds.guestDocumentHandle.handlers.pointermove({ pointerId: 1, clientX: 140, clientY: 150 });
+    assert.equal(guestIds.guestDocument.style.left, "180px");
+    assert.equal(guestIds.guestDocument.style.top, "160px");
+    guestIds.guestDocumentHandle.handlers.pointerup();
+    guestIds.guestDocumentHandle.handlers.keydown({ target: guestIds.guestDocumentHandle,
+        key: "ArrowRight", shiftKey: false, preventDefault() {} });
+    assert.equal(guestIds.guestDocument.style.left, "200px");
+    await masterContext.window.REAL_TABLETOP_ONLINE.sendDocument({ kind: "show",
+        document: { id: "clue-2", title: "Carta longa", kind: "text", text: "Pista ".repeat(500) } });
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(guestIds.guestDocumentPages.hidden, false, "texto longo usa páginas, não scroll");
+    assert.equal(guestIds.guestDocumentPageStatus.textContent.startsWith("1 / "), true);
+    guestIds.guestDocumentNext.handlers.click();
+    assert.equal(guestIds.guestDocumentPageStatus.textContent.startsWith("2 / "), true);
+    guestIds.guestDocumentClose.handlers.click();
+    assert.equal(guestIds.guestDocument.open, false);
+    assert.equal(guestIds.guestDocumentOpen.hidden, false);
+    guestIds.guestDocumentOpen.handlers.click();
+    assert.equal(guestIds.guestDocument.open, true);
+    await masterContext.window.REAL_TABLETOP_ONLINE.sendDocument({ kind: "hide" });
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(guestIds.guestDocument.open, false);
+    assert.equal(guestIds.guestDocumentOpen.hidden, true);
     await handlers.click();
     await new Promise((resolve) => setTimeout(resolve, 10));
     assert.equal(track.stopped, true);

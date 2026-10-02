@@ -18,6 +18,7 @@
     let user = null;
     let room = null;
     let channel = null;
+    let channelReady = false;
     let publishTimer = null;
     let publishing = false;
     let publishAgain = false;
@@ -144,11 +145,30 @@
     function attachChannel() {
         if (channel) client.removeChannel(channel);
         closePeers();
+        channelReady = false;
         channel = room ? client.channel(`real-tabletop:${room.invite_code}`)
             .on("broadcast", { event: "rtc" }, handleSignal)
-            .on("presence", { event: "sync" }, showViewers).subscribe() : null;
+            .on("broadcast", { event: "document-request" }, ({ payload }) => {
+                if (room?.is_live && /^[0-9a-f-]{36}$/i.test(payload?.viewerId || "")) {
+                    window.REAL_TABLETOP_DOCUMENTS?.sendCurrent(payload.viewerId);
+                }
+            })
+            .on("presence", { event: "sync" }, showViewers).subscribe((state) => {
+                channelReady = state === "SUBSCRIBED";
+            }) : null;
         showViewers();
     }
+
+    window.REAL_TABLETOP_ONLINE = {
+        isLive: () => !!user && !!room?.is_live,
+        async sendDocument(payload) {
+            if (!user || !room?.is_live || !channel || !channelReady) return false;
+            try {
+                const result = await channel.send({ type: "broadcast", event: "document", payload });
+                return result === "ok" || result === undefined;
+            } catch { return false; }
+        }
+    };
 
     async function loadRoom() {
         if (!user) return;
@@ -174,6 +194,7 @@
         user = nextUser;
         room = null;
         if (channel) { client.removeChannel(channel); channel = null; }
+        channelReady = false;
         showViewers();
         showState();
         if (!user) { say("Entre com a conta do mestre para compartilhar a mesa."); return; }
@@ -249,6 +270,7 @@
             room = data;
             await signal({ kind: "ended" });
             stopLiveStream();
+            window.dispatchEvent(new Event("real:tabletop-stopped"));
             showState();
             say("Transmissão encerrada. A mesa continua salva neste navegador.");
             await sendChanged();

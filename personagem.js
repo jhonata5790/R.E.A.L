@@ -1,6 +1,9 @@
 const STORAGE_KEY = "cronicas-biblioteca-v2";
 const THEMES = window.REAL_ATTRIBUTE_THEMES;
 const NEX_RULES = window.REAL_NEX_RULES;
+const EQUIPMENT_CATALOG = window.REAL_EQUIPMENT_CATALOG || [];
+const EQUIPMENT_COLLECTIONS = window.REAL_EQUIPMENT_COLLECTIONS || [];
+const EQUIPMENT_RULES = window.REAL_EQUIPMENT_RULES;
 const ATTRIBUTES = [
     { id: "agilidade", name: "Agilidade" },
     { id: "forca", name: "Força" },
@@ -11,6 +14,15 @@ const ATTRIBUTES = [
 const ORIGINS = window.REAL_ORIGINS;
 const ORIGIN_NAMES = Object.fromEntries(ORIGINS.map((origin) => [origin.id, origin.name]));
 const $ = (id) => document.getElementById(id);
+const attributeNodes = new Map();
+let attributesDirty = false;
+let refreshResourcesForAttributes = () => {};
+let refreshSkillsForAttributes = () => {};
+let refreshCombatForAttributes = () => {};
+
+function validAttribute(value) {
+    return Number.isInteger(value) && value >= -100 && value <= 100;
+}
 
 function readLibrary() {
     try {
@@ -52,28 +64,100 @@ function applyTheme(key) {
 
 function renderAttributes(character, theme) {
     const values = $("attributeWheelValues");
-    const list = $("attributeList");
     ATTRIBUTES.forEach(({ id, name }) => {
         const stored = character.attributes?.[id];
-        const value = Number.isInteger(stored) && stored >= 0 && stored <= 5 ? String(stored) : "—";
+        const value = validAttribute(stored) ? String(stored) : "—";
         const marker = document.createElement("div");
         marker.className = "attribute-wheel__value";
+        marker.setAttribute("role", "group");
+        marker.setAttribute("aria-label", `${name}: ${validAttribute(stored) ? value : "não informado"}`);
         const [x, y] = theme.centers[id];
         marker.style.setProperty("--wheel-x", `${x}%`);
         marker.style.setProperty("--wheel-y", `${y}%`);
         marker.style.setProperty("--wheel-value-top", `${theme.valueTop[id] ?? (id === "presenca" || id === "vigor" ? 17 : 22)}%`);
         const number = document.createElement("span");
         number.textContent = value;
-        marker.append(number);
+        number.setAttribute("aria-hidden", "true");
+        const pick = document.createElement("button");
+        pick.type = "button";
+        pick.className = "attribute-wheel__pick";
+        pick.disabled = true;
+        pick.setAttribute("aria-label", `Editar ${name}, valor ${value}`);
+        const input = document.createElement("input");
+        input.type = "number";
+        input.min = "-100";
+        input.max = "100";
+        input.step = "1";
+        input.inputMode = "numeric";
+        input.className = "attribute-wheel__input";
+        input.setAttribute("aria-label", `Novo valor de ${name}, de menos 100 a 100`);
+        input.hidden = true;
+        marker.append(number, pick, input);
         values.append(marker);
+        attributeNodes.set(id, { name, marker, number, pick, input });
+    });
+}
 
-        const pair = document.createElement("div");
-        const label = document.createElement("dt");
-        const amount = document.createElement("dd");
-        label.textContent = name;
-        amount.textContent = value;
-        pair.append(label, amount);
-        list.append(pair);
+function setupAttributeEditing() {
+    const toggle = $("toggleAttributeEdit");
+    const values = $("attributeWheelValues");
+    const hint = $("attributeEditHint");
+    let editing = false;
+    let activeId = null;
+
+    function closeInput(id, save) {
+        if (activeId !== id) return;
+        const node = attributeNodes.get(id);
+        const raw = node.input.value.trim();
+        const next = save && /^[-+]?\d+$/.test(raw) ? Math.max(-100, Math.min(100, Number(raw))) : null;
+        node.input.hidden = true;
+        node.pick.hidden = false;
+        activeId = null;
+        if (next === null) return;
+        const previous = character.attributes?.[id];
+        if (next === previous) return;
+        character.attributes = { ...(character.attributes || {}), [id]: next };
+        node.number.textContent = String(next);
+        node.marker.setAttribute("aria-label", `${node.name}: ${next}`);
+        node.pick.setAttribute("aria-label", `Editar ${node.name}, valor ${next}`);
+        attributesDirty = true;
+        refreshResourcesForAttributes();
+        refreshSkillsForAttributes();
+        refreshCombatForAttributes();
+        persistSheet();
+    }
+
+    attributeNodes.forEach(({ pick, input }, id) => {
+        pick.addEventListener("click", () => {
+            if (!editing) return;
+            if (activeId) closeInput(activeId, true);
+            activeId = id;
+            pick.hidden = true;
+            input.value = validAttribute(character.attributes?.[id]) ? String(character.attributes[id]) : "";
+            input.hidden = false;
+            input.focus();
+            input.select?.();
+        });
+        input.addEventListener("change", () => closeInput(id, true));
+        input.addEventListener("blur", () => closeInput(id, true));
+        input.addEventListener("keydown", (event) => {
+            if (event.key === "Enter" || event.key === "Escape") {
+                event.preventDefault();
+                closeInput(id, event.key === "Enter");
+                pick.focus();
+            }
+        });
+    });
+
+    toggle.addEventListener("click", () => {
+        if (activeId) closeInput(activeId, true);
+        editing = !editing;
+        values.dataset.editing = String(editing);
+        toggle.setAttribute("aria-pressed", String(editing));
+        toggle.setAttribute("aria-label", editing ? "Concluir edição dos atributos" : "Editar atributos");
+        toggle.title = editing ? "Concluir edição" : "Editar atributos";
+        hint.hidden = !editing;
+        attributeNodes.forEach(({ pick }) => { pick.disabled = !editing; });
     });
 }
 
@@ -142,10 +226,10 @@ function setupTabs(selector, dataKey, initial) {
 
 function setupSheetTabs() {
     const tabs = [...document.querySelectorAll("[data-sheet-tab]")];
-    const pinned = new Set(["informacoes", "atributos", "pericias"]);
-    const desktop = window.matchMedia?.("(min-width: 1100px)");
+    const pinned = new Set(["atributos"]);
+    const desktop = window.matchMedia?.("(min-width: 900px)");
     let mobileSection = "informacoes";
-    let desktopSection = "combate";
+    let desktopSection = "pericias";
 
     function render() {
         const isDesktop = Boolean(desktop?.matches);
@@ -208,8 +292,38 @@ const ENTRY_TYPES = {
     rituais: { list: "ritualsList", singular: "ritual" }
 };
 const INVENTORY_CATEGORIES = {
-    itens: "Itens", armas: "Armas", protecao: "Proteção", geral: "Geral", amaldicoados: "Itens amaldiçoados"
+    itens: "Itens", armas: "Armas", municoes: "Munições", protecao: "Proteção", geral: "Geral", amaldicoados: "Itens amaldiçoados"
 };
+const CATALOG_CATEGORIES = ["armas", "municoes", "protecao", "geral", "amaldicoados"];
+
+function bookCategoryLabel(value) {
+    return ["0", "I", "II", "III", "IV"][value] ?? String(value);
+}
+
+function weaponStatsText(weapon) {
+    if (!Number.isInteger(weapon.weaponCategory) || typeof weapon.damage !== "string" || typeof weapon.damageType !== "string"
+        || !(Number.isInteger(weapon.critical) || (typeof weapon.critical === "string" && /^(?:\d+\/)?x\d+$/.test(weapon.critical)))
+        || !Number.isInteger(weapon.space)) return "";
+    const details = [];
+    if (weapon.weaponClass) details.push([weapon.weaponClass, weapon.weaponStyle, weapon.hands, weapon.weaponTraits].filter(Boolean).join(" · "));
+    details.push(`Categoria ${bookCategoryLabel(weapon.weaponCategory)}`);
+    if (weapon.range) details.push(`Alcance ${weapon.range}`);
+    details.push(`Dano ${weapon.damage} de ${weapon.damageType}`, `Crítico ${weapon.critical}`, `Espaço ${weapon.space}`);
+    if (weapon.ammunition) details.push(`Munição ${weapon.ammunition}`);
+    return details.join(" · ");
+}
+function ammunitionStatsText(ammunition) {
+    if (!Number.isInteger(ammunition.itemCategory) || !Number.isInteger(ammunition.space)) return "";
+    return `Categoria ${bookCategoryLabel(ammunition.itemCategory)} · Espaço ${ammunition.space}`;
+}
+function protectionStatsText(protection) {
+    if (!Number.isInteger(protection.defense) || !Number.isInteger(protection.itemCategory) || !Number.isInteger(protection.space)) return "";
+    return `Defesa +${protection.defense} · Categoria ${bookCategoryLabel(protection.itemCategory)} · Espaços ${protection.space}`;
+}
+function generalItemStatsText(item) {
+    if (!Number.isInteger(item.itemCategory) || !Number.isInteger(item.space)) return "";
+    return [item.element || item.itemType, `Categoria ${bookCategoryLabel(item.itemCategory)}`, `Espaços ${item.space}`].filter(Boolean).join(" · ");
+}
 const SKILLS = [
     { id: "acrobacia", name: "Acrobacia", attribute: "agilidade", loadPenalty: true },
     { id: "adestramento", name: "Adestramento", attribute: "presenca", trainingMark: true },
@@ -257,8 +371,10 @@ function persistSheet() {
         const current = latest?.characters?.find((entry) => entry && String(entry.id) === String(character.id));
         if (!current) throw new Error("Ficha não encontrada no armazenamento");
         current.sheet = sheetData();
+        if (attributesDirty) current.attributes = { ...character.attributes };
         if (NEX_RULES.allowedNex(classTheme(character)).includes(character.nex)) current.nex = character.nex;
         localStorage.setItem(STORAGE_KEY, JSON.stringify(latest));
+        attributesDirty = false;
         $("storageNote").textContent = "Esta ficha está salva neste navegador.";
         return true;
     } catch {
@@ -290,7 +406,7 @@ function setupNexResources() {
             $(`${id}Decrease`).disabled = true;
             $(`${id}Increase`).disabled = true;
         }
-        return;
+        return () => {};
     }
 
     for (const value of allowed) {
@@ -401,16 +517,125 @@ function setupNexResources() {
             save(`Máximo de ${name} ajustado para ${item.max}.`);
         });
     }
+    return () => { recalculate(); render(); };
 }
 
-function equippedWeapon() {
+function equippedItem(slot) {
     const data = sheetData();
-    if (typeof data.equippedWeaponId !== "string" || !data.equippedWeaponId) return null;
+    if (typeof data[slot] !== "string" || !data[slot]) return null;
     const inventory = Array.isArray(data.inventario) ? data.inventario : [];
-    return inventory.find((item) => item && item.category === "armas" && item.id === data.equippedWeaponId) || null;
+    return inventory.find((item) => item && EQUIPMENT_RULES.slot(item) === slot && item.id === data[slot]) || null;
+}
+function equippedWeapon() { return equippedItem("equippedWeaponId"); }
+function handsConflict() {
+    const luta = skillSettings(SKILLS.find((skill) => skill.id === "luta"));
+    return Boolean(equippedItem("equippedShieldId") && EQUIPMENT_RULES.twoHands(equippedWeapon(), effectiveTraining("luta", luta)));
+}
+function skillBonus(skill, settings) {
+    return effectiveTraining(skill.id, settings) + settings.other - (skill.loadPenalty && EQUIPMENT_RULES.isHeavy(equippedItem("equippedArmorId")) ? 5 : 0);
+}
+function combatNumber(value) { return Number.isFinite(value) ? Math.max(-1000, Math.min(1000, value)) : 0; }
+function defenseSettings() {
+    const saved = sheetData().defenses;
+    return saved && typeof saved === "object" && !Array.isArray(saved) ? saved : {};
+}
+function renderDefenses() {
+    const armor = equippedItem("equippedArmorId"), shield = equippedItem("equippedShieldId");
+    const adjustment = defenseSettings();
+    const agi = character.attributes?.agilidade;
+    const conflict = handsConflict();
+    const equipment = [armor, conflict ? null : shield].reduce((sum, item) => sum + (Number.isFinite(item?.defense) ? item.defense : 0), 0);
+    const defense = validAttribute(agi) ? 10 + agi + equipment + combatNumber(adjustment.defense) : null;
+    const fortitude = skillSettings(SKILLS.find((skill) => skill.id === "fortitude"));
+    const reflexos = skillSettings(SKILLS.find((skill) => skill.id === "reflexos"));
+    const trainedBlock = effectiveTraining("fortitude", fortitude) > 0;
+    const trainedDodge = effectiveTraining("reflexos", reflexos) > 0;
+    $("defenseValue").textContent = defense === null ? "—" : String(defense);
+    $("blockValue").textContent = trainedBlock ? String(Math.max(0, fortitude.other + effectiveTraining("fortitude", fortitude) + combatNumber(adjustment.block))) : "Sem treino";
+    $("dodgeValue").textContent = trainedDodge && defense !== null ? String(defense + reflexos.other + effectiveTraining("reflexos", reflexos) + combatNumber(adjustment.dodge)) : "Sem treino / atributo";
+    $("protectionValue").textContent = [armor?.name, shield?.name].filter(Boolean).join(" + ") || "Nenhuma";
+    $("resistanceValue").textContent = [EQUIPMENT_RULES.isHeavy(armor) ? "Balístico, corte, impacto e perfuração 2" : "", typeof adjustment.resistance === "string" ? adjustment.resistance : ""].filter(Boolean).join(" · ") || "Nenhuma registrada";
+    $("proficiencyValue").textContent = typeof adjustment.proficiency === "string" && adjustment.proficiency ? adjustment.proficiency : "Registrar nos ajustes";
+    $("defenseExplanation").textContent = `Defesa = 10 + AGI ${validAttribute(agi) ? agi : "—"} + equipamento ${equipment} + outros ${formatBonus(combatNumber(adjustment.defense))}. Bloqueio usa o bônus de Fortitude; Esquiva soma o bônus de Reflexos à Defesa. Ambos exigem treino.${EQUIPMENT_RULES.isHeavy(armor) ? " Proteção pesada: −5 nas perícias marcadas com +." : ""}${conflict ? " Escudo sem bônus: há uma arma de duas mãos equipada. Corrija o equipamento ou a empunhadura." : ""}`;
+}
+function setupDefenseAdjustments() {
+    for (const [id, key, numeric] of [["defenseBonus", "defense", true], ["blockBonus", "block", true], ["dodgeBonus", "dodge", true], ["resistanceNotes", "resistance", false], ["proficiencyNotes", "proficiency", false]]) {
+        const field = $(id);
+        field.value = numeric ? String(combatNumber(defenseSettings()[key])) : String(defenseSettings()[key] || "");
+        field.addEventListener("change", () => {
+            const previous = sheetData().defenses;
+            sheetData().defenses = { ...defenseSettings(), [key]: numeric ? combatNumber(Number(field.value)) : field.value.trim().slice(0, 200) };
+            if (!persistSheet()) {
+                sheetData().defenses = previous;
+                field.value = numeric ? String(combatNumber(defenseSettings()[key])) : String(defenseSettings()[key] || "");
+            }
+            renderDefenses();
+        });
+    }
+}
+function weaponSettings(weapon) {
+    const saved = weapon.combat && typeof weapon.combat === "object" && !Array.isArray(weapon.combat) ? weapon.combat : {};
+    const settings = { ...EQUIPMENT_RULES.defaults(weapon), ...saved };
+    if (!["luta", "pontaria"].includes(settings.skill)) settings.skill = EQUIPMENT_RULES.defaults(weapon).skill;
+    if (settings.attribute !== "skill" && !ATTRIBUTES.some((item) => item.id === settings.attribute)) settings.attribute = "skill";
+    if (settings.damageAttribute !== "none" && !ATTRIBUTES.some((item) => item.id === settings.damageAttribute)) settings.damageAttribute = "none";
+    settings.attackBonus = combatNumber(settings.attackBonus);
+    settings.damageBonus = combatNumber(settings.damageBonus);
+    return settings;
+}
+function attackProfile(weapon) {
+    const settings = weaponSettings(weapon);
+    const skill = SKILLS.find((item) => item.id === settings.skill);
+    const training = skillSettings(skill);
+    const attribute = settings.attribute === "skill" ? training.attribute : settings.attribute;
+    return { settings, skill, attribute, bonus: skillBonus(skill, training) + settings.attackBonus };
+}
+function rollWeaponAttack(weapon) {
+    if (handsConflict()) return showRollError("Há um escudo e uma arma de duas mãos equipados. Corrija o equipamento ou a empunhadura antes de atacar.");
+    const profile = attackProfile(weapon);
+    const roll = EQUIPMENT_RULES.rollTest(character.attributes?.[profile.attribute]);
+    if (!roll) return showRollError("Preencha o atributo usado no ataque na roda da ficha.");
+    showDiceResult({ name: `Ataque · ${weapon.name}` }, roll.dice, roll.chosenIndex, profile.bonus, roll.useLowest);
+    const critical = EQUIPMENT_RULES.parseCritical(profile.settings.critical);
+    const natural = roll.dice[roll.chosenIndex];
+    const note = document.createElement("p");
+    note.className = "roll-result__error";
+    note.textContent = critical && natural >= critical.threshold ? `Ameaça de crítico (${critical.threshold}+ no d20). Confirme o acerto com o mestre antes de rolar dano crítico.` : "Compare o total do ataque com a Defesa do alvo.";
+    $("skillRollResult").append(note);
+    $("skillRollResult").setAttribute("aria-label", `${$("skillRollResult").getAttribute("aria-label")} ${note.textContent}`);
+}
+function rollWeaponDamage(weapon, isCritical) {
+    const settings = weaponSettings(weapon);
+    const base = EQUIPMENT_RULES.parseDamage(settings.damage);
+    const extra = settings.extraDamage ? EQUIPMENT_RULES.parseDamage(settings.extraDamage) : null;
+    const critical = EQUIPMENT_RULES.parseCritical(settings.critical);
+    if (!base || (settings.extraDamage && !extra)) return showRollError("Configure o dano com uma expressão como 1d6 ou 2d8+2. Dano extra usa o mesmo formato.");
+    if (isCritical && !critical) return showRollError("Configure o crítico como 20, 19, x3 ou 19/x3.");
+    const attribute = settings.damageAttribute === "none" ? 0 : character.attributes?.[settings.damageAttribute];
+    if (!validAttribute(attribute)) return showRollError("Preencha o atributo somado ao dano na roda da ficha.");
+    const multiplier = isCritical ? critical.multiplier : 1;
+    const roll = EQUIPMENT_RULES.rollDamage(base, extra, multiplier, settings.damageBonus + attribute);
+    const result = $("skillRollResult");
+    result.replaceChildren();
+    result.textContent = "";
+    result.hidden = false;
+    const titleText = `Dano${isCritical ? " crítico" : ""} · ${weapon.name}`;
+    const header = document.createElement("div");
+    header.className = "roll-result__header";
+    const title = document.createElement("strong");
+    title.textContent = titleText;
+    header.append(title, rollCloseButton(result));
+    const total = document.createElement("output");
+    total.className = "combat-damage-total";
+    total.textContent = String(roll.total);
+    const detail = document.createElement("p");
+    detail.className = "roll-result__error";
+    detail.textContent = `${base.count * multiplier}d${base.sides}: ${roll.dice.join(", ")}${extra ? ` · extra ${extra.count}d${extra.sides}: ${roll.extraDice.join(", ")}` : ""} · bônus fixo ${formatBonus(roll.fixed)}${weapon.damageType ? ` · ${weapon.damageType}` : ""}. Total: ${roll.total}.`;
+    result.append(header, total, detail);
+    result.setAttribute("aria-label", `${titleText}. ${detail.textContent}`);
 }
 
-function renderEquippedWeapon() {
+function renderEquippedWeapon(keepSettingsOpen = false) {
     const container = $("equippedWeapon");
     container.replaceChildren();
     const weapon = equippedWeapon();
@@ -423,14 +648,106 @@ function renderEquippedWeapon() {
     const name = document.createElement("strong");
     name.textContent = weapon.name;
     container.append(name);
+    const stats = weaponStatsText(weapon);
+    if (stats) {
+        const details = document.createElement("p");
+        details.className = "combat-equipped__stats";
+        details.textContent = `${weapon.group ? `${weapon.group} · ` : ""}${stats}`;
+        container.append(details);
+    }
     if (weapon.description) {
         const description = document.createElement("p");
         description.textContent = weapon.description;
         container.append(description);
     }
+    const profile = attackProfile(weapon);
+    const summary = document.createElement("p");
+    summary.className = "combat-equipped__stats";
+    function updateSummary() {
+        const current = attackProfile(weapon);
+        const value = character.attributes?.[current.attribute];
+        const count = validAttribute(value) ? `${value > 0 ? value : value === 0 ? 2 : 1 - value}d20${value <= 0 ? " (menor)" : " (maior)"}` : "Atributo não preenchido";
+        summary.textContent = `${current.skill.name} · ${count} · bônus ${formatBonus(current.bonus)} · dano ${current.settings.damage || "não configurado"} · crítico ${current.settings.critical}${handsConflict() ? " · Conflito: escudo e arma de duas mãos" : ""}`;
+    }
+    updateSummary();
+    const actions = document.createElement("div");
+    actions.className = "combat-actions";
+    for (const [label, action, callback] of [["Rolar ataque", "attack", () => rollWeaponAttack(weapon)], ["Rolar dano", "damage", () => rollWeaponDamage(weapon, false)], ["Dano crítico", "critical", () => rollWeaponDamage(weapon, true)]]) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "button button--primary";
+        button.textContent = label;
+        button.dataset.combatAction = action;
+        button.addEventListener("click", callback);
+        actions.append(button);
+    }
+    const adjustments = document.createElement("details");
+    adjustments.className = "resource-adjustments";
+    adjustments.open = keepSettingsOpen;
+    const heading = document.createElement("summary");
+    heading.textContent = "Configurar ataque, dano e empunhadura";
+    const fields = document.createElement("div");
+    fields.className = "combat-settings";
+    const attributeOptions = ATTRIBUTES.map((item) => [item.id, item.name]);
+    const specifications = [
+        ["Perícia do ataque", "skill", [["luta", "Luta"], ["pontaria", "Pontaria / arremesso"]]],
+        ["Atributo do ataque", "attribute", [["skill", "O da perícia"], ...attributeOptions]],
+        ["Dano base (ex.: 1d6+2)", "damage", "text"],
+        ["Crítico (ex.: 19/x3)", "critical", "text"],
+        ["Atributo somado ao dano", "damageAttribute", [["none", "Nenhum"], ...attributeOptions]],
+        ["Outros no ataque", "attackBonus", "number"],
+        ["Outros no dano", "damageBonus", "number"],
+        ["Dano extra (não multiplica)", "extraDamage", "text"],
+        ["Empunhadura", "hands", [["auto", "Conforme a arma"], ["one", "Uma mão"], ["two", "Duas mãos"]]]
+    ];
+    specifications.forEach(([labelText, key, type]) => {
+        const label = document.createElement("label");
+        label.textContent = labelText;
+        const field = document.createElement(Array.isArray(type) ? "select" : "input");
+        field.dataset.combatSetting = key;
+        field.setAttribute("aria-label", `${labelText} de ${weapon.name}`);
+        if (Array.isArray(type)) {
+            type.forEach(([optionValue, text]) => {
+                const option = document.createElement("option");
+                option.value = optionValue;
+                option.textContent = text;
+                field.append(option);
+            });
+        } else {
+            field.type = type;
+            field.maxLength = 40;
+            if (type === "number") { field.min = "-1000"; field.max = "1000"; field.step = "1"; }
+        }
+        field.value = String(profile.settings[key]);
+        field.addEventListener("change", () => {
+            const previous = weapon.combat;
+            const next = type === "number" ? combatNumber(Number(field.value)) : field.value.trim();
+            weapon.combat = { ...(previous && typeof previous === "object" && !Array.isArray(previous) ? previous : {}), [key]: next };
+            if (equippedItem("equippedShieldId") && EQUIPMENT_RULES.twoHands(weapon, effectiveTraining("luta", skillSettings(SKILLS.find((skill) => skill.id === "luta"))))) {
+                weapon.combat = previous;
+                field.value = String(weaponSettings(weapon)[key]);
+                showRollError("Desequipe o escudo antes de empunhar a arma com duas mãos.");
+                return;
+            }
+            if (!persistSheet()) {
+                weapon.combat = previous;
+                field.value = String(weaponSettings(weapon)[key]);
+                return;
+            }
+            updateSummary();
+            if (key === "hands") {
+                const damageField = Array.from(fields.children, (item) => item.children[0]).find((item) => item.dataset.combatSetting === "damage");
+                damageField.value = String(weaponSettings(weapon).damage);
+            }
+            renderDefenses();
+        });
+        label.append(field);
+        fields.append(label);
+    });
     const note = document.createElement("small");
-    note.textContent = "Dano e rolagens serão configurados depois.";
-    container.append(note);
+    note.textContent = "Armas ágeis podem usar Agilidade: ajuste ataque e dano. Para arremessar, escolha Pontaria. Use dano base para variações de empunhadura. Regras especiais da descrição e falta de proficiência exigem ajuste manual.";
+    adjustments.append(heading, fields, note);
+    container.append(summary, actions, adjustments);
 }
 
 function renderEntries(kind, expandedId = null) {
@@ -486,16 +803,27 @@ function renderEntries(kind, expandedId = null) {
             openPanel = wasOpen ? null : panel;
         });
         const category = document.createElement("span");
-        category.textContent = fromOrigin ? `Habilidade de origem · ${characterOrigin.name}` : kind === "inventario" ? (INVENTORY_CATEGORIES[entry.category] || "Geral") : kind === "habilidades" ? "Habilidade adicionada" : "Ritual";
+        category.textContent = fromOrigin ? `Habilidade de origem · ${characterOrigin.name}` : kind === "inventario" ? `${INVENTORY_CATEGORIES[entry.category] || "Geral"}${entry.group ? ` · ${entry.group}` : ""}` : kind === "habilidades" ? "Habilidade adicionada" : "Ritual";
         panel.append(category);
+        const catalogStats = kind !== "inventario" ? "" : entry.category === "armas" ? weaponStatsText(entry)
+            : entry.category === "municoes" ? ammunitionStatsText(entry)
+                : entry.category === "protecao" ? protectionStatsText(entry)
+                    : (entry.category === "geral" || entry.category === "amaldicoados") ? generalItemStatsText(entry) : "";
+        if (catalogStats) {
+            const stats = document.createElement("p");
+            stats.className = "entry-item__catalog-stats";
+            stats.textContent = catalogStats;
+            panel.append(stats);
+        }
         if (entry.description) {
             const description = document.createElement("p");
             description.textContent = entry.description;
             panel.append(description);
         }
         let equipCheckbox = null;
-        if (kind === "inventario" && entry.category === "armas") {
-            const selected = equippedWeapon() === entry;
+        if (kind === "inventario" && EQUIPMENT_RULES.slot(entry)) {
+            const slot = EQUIPMENT_RULES.slot(entry);
+            const selected = equippedItem(slot) === entry;
             row.dataset.equipped = String(selected);
             toggle.className += " entry-item__toggle--weapon";
             equipCheckbox = document.createElement("input");
@@ -506,18 +834,29 @@ function renderEntries(kind, expandedId = null) {
             equipCheckbox.setAttribute("title", `${selected ? "Desequipar" : "Equipar"} ${entry.name}`);
             equipCheckbox.addEventListener("change", () => {
                 const data = sheetData();
-                const previous = data.equippedWeaponId;
+                const previous = data[slot];
+                const weapon = slot === "equippedWeaponId" ? entry : equippedWeapon();
+                const shield = slot === "equippedShieldId" ? entry : equippedItem("equippedShieldId");
+                const luta = skillSettings(SKILLS.find((skill) => skill.id === "luta"));
+                if (slot !== "equippedArmorId" && equipCheckbox.checked && weapon && shield && EQUIPMENT_RULES.twoHands(weapon, effectiveTraining("luta", luta))) {
+                    equipCheckbox.checked = selected;
+                    $("equipmentMessage").textContent = "Arma de duas mãos e escudo não podem ser equipados juntos. Desequipe um deles primeiro ou ajuste uma empunhadura permitida em Combate.";
+                    return;
+                }
                 const hadId = Boolean(entry.id);
                 if (!entry.id) entry.id = crypto.randomUUID();
-                data.equippedWeaponId = equipCheckbox.checked ? entry.id : null;
+                data[slot] = equipCheckbox.checked ? entry.id : null;
                 if (!persistSheet()) {
-                    data.equippedWeaponId = previous;
+                    data[slot] = previous;
                     if (!hadId) delete entry.id;
                     equipCheckbox.checked = selected;
                     return;
                 }
+                $("equipmentMessage").textContent = `${entry.name} ${equipCheckbox.checked ? "equipado" : "desequipado"}.`;
                 renderEntries("inventario", toggle.getAttribute("aria-expanded") === "true" ? entry.id : null);
                 renderEquippedWeapon();
+                setupSkills();
+                renderDefenses();
             });
         }
         if (!fromOrigin) {
@@ -530,15 +869,16 @@ function renderEntries(kind, expandedId = null) {
                 if (!window.confirm(`Remover ${entry.name} da ficha?`)) return;
                 const data = sheetData();
                 const previousItems = data[kind];
-                const previousEquipped = data.equippedWeaponId;
+                const slot = kind === "inventario" ? EQUIPMENT_RULES.slot(entry) : null;
+                const previousEquipped = slot ? data[slot] : null;
                 data[kind] = items.filter((item) => item !== entry);
-                if (kind === "inventario" && entry.id && data.equippedWeaponId === entry.id) data.equippedWeaponId = null;
+                if (slot && entry.id && data[slot] === entry.id) data[slot] = null;
                 if (persistSheet()) {
                     renderEntries(kind);
-                    if (kind === "inventario") renderEquippedWeapon();
+                    if (kind === "inventario") { renderEquippedWeapon(); setupSkills(); renderDefenses(); }
                 } else {
                     data[kind] = previousItems;
-                    data.equippedWeaponId = previousEquipped;
+                    if (slot) data[slot] = previousEquipped;
                 }
             });
             panel.append(remove);
@@ -555,10 +895,217 @@ function setupSheetEntries() {
     Object.keys(ENTRY_TYPES).forEach(renderEntries);
     renderEquippedWeapon();
     const dialog = $("entryDialog");
+    const catalogDialog = $("catalogDialog");
+    function addCatalogItem(item) {
+        const category = INVENTORY_CATEGORIES[item.inventoryCategory] ? item.inventoryCategory : "itens";
+        const entry = {
+            id: crypto.randomUUID(),
+            name: item.name,
+            description: item.description,
+            category,
+            catalogId: item.id,
+            group: item.group
+        };
+        if (category === "armas") Object.assign(entry, {
+            weaponCategory: item.category,
+            damage: item.damage,
+            damageType: item.damageType,
+            critical: item.critical,
+            space: item.space
+        });
+        if (category === "armas") {
+            for (const field of ["range", "weaponClass", "weaponStyle", "hands", "weaponTraits", "ammunition"]) {
+                if (item[field]) entry[field] = item[field];
+            }
+        }
+        if (category === "municoes") {
+            entry.itemCategory = item.category;
+            entry.space = item.space;
+        }
+        if (category === "protecao") {
+            entry.defense = item.defense;
+            entry.itemCategory = item.category;
+            entry.space = item.space;
+        }
+        if (category === "geral" || category === "amaldicoados") {
+            if (item.itemType) entry.itemType = item.itemType;
+            if (item.element) entry.element = item.element;
+            entry.itemCategory = item.category;
+            entry.space = item.space;
+        }
+        const entries = sheetData();
+        const previous = entries.inventario;
+        entries.inventario = [...(Array.isArray(previous) ? previous : []), entry];
+        if (!persistSheet()) {
+            entries.inventario = previous;
+            return;
+        }
+        catalogDialog.close();
+        if (inventoryFilter !== "todos") inventoryFilter = category;
+        updateInventoryFilters();
+        renderEntries("inventario", entry.id);
+    }
+    function renderCatalog(selectedGroup = null, selectedCategory = "armas") {
+        const collections = $("catalogCollections");
+        const categories = $("catalogCategories");
+        const list = $("catalogList");
+        collections.replaceChildren();
+        categories.replaceChildren();
+        list.replaceChildren();
+        const groups = new Map(EQUIPMENT_COLLECTIONS.map((collection) => [collection.name, []]));
+        EQUIPMENT_CATALOG.forEach((item) => {
+            if (!groups.has(item.group)) groups.set(item.group, []);
+            groups.get(item.group).push(item);
+        });
+        if (!groups.size) {
+            $("catalogGroupTitle").textContent = "";
+            const empty = document.createElement("p");
+            empty.className = "catalog-list__empty";
+            empty.textContent = "Nenhum item disponível no catálogo ainda.";
+            list.append(empty);
+            return;
+        }
+        const activeGroup = groups.has(selectedGroup) ? selectedGroup : groups.keys().next().value;
+        const activeCategory = CATALOG_CATEGORIES.includes(selectedCategory) ? selectedCategory : "armas";
+        $("catalogGroupTitle").textContent = `${INVENTORY_CATEGORIES[activeCategory]} · ${activeGroup}`;
+        groups.forEach((items, groupName) => {
+            const collection = EQUIPMENT_COLLECTIONS.find((entry) => entry.name === groupName);
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = "catalog-collection";
+            button.setAttribute("aria-label", `Selecionar catálogo ${groupName}`);
+            button.setAttribute("aria-pressed", String(groupName === activeGroup));
+            const cover = document.createElement("span");
+            cover.className = "catalog-collection__cover";
+            if (collection?.cover) {
+                const image = document.createElement("img");
+                image.src = collection.cover;
+                image.alt = "";
+                cover.append(image);
+            } else {
+                cover.textContent = "Capa em breve";
+            }
+            const name = document.createElement("strong");
+            name.textContent = groupName;
+            button.append(cover, name);
+            button.addEventListener("click", () => renderCatalog(groupName, activeCategory));
+            collections.append(button);
+        });
+        CATALOG_CATEGORIES.forEach((categoryId) => {
+            const button = document.createElement("button");
+            button.type = "button";
+            button.textContent = INVENTORY_CATEGORIES[categoryId];
+            button.setAttribute("aria-pressed", String(categoryId === activeCategory));
+            button.addEventListener("click", () => renderCatalog(activeGroup, categoryId));
+            categories.append(button);
+        });
+        const visibleItems = groups.get(activeGroup).filter((item) => item.inventoryCategory === activeCategory);
+        if (!visibleItems.length) {
+            const empty = document.createElement("p");
+            empty.className = "catalog-list__empty";
+            empty.textContent = "Nenhum item nesta categoria ainda.";
+            list.append(empty);
+            return;
+        }
+        let openToggle = null;
+        let openPanel = null;
+        visibleItems.forEach((item, index) => {
+            const row = document.createElement("article");
+            row.className = "catalog-item";
+            const toggle = document.createElement("button");
+            toggle.type = "button";
+            toggle.className = "catalog-item__toggle";
+            toggle.id = `catalog-item-toggle-${index}`;
+            toggle.setAttribute("aria-expanded", "false");
+            toggle.setAttribute("aria-controls", `catalog-item-details-${index}`);
+            const name = document.createElement("strong");
+            name.textContent = item.name;
+            const summary = document.createElement("small");
+            summary.textContent = item.inventoryCategory === "armas" && item.damage && item.critical
+                ? `Dano: ${item.damage}   ·   Crítico: ${item.critical}`
+                : ["municoes", "geral", "amaldicoados"].includes(item.inventoryCategory) && Number.isInteger(item.category) && Number.isInteger(item.space)
+                    ? `Categoria: ${bookCategoryLabel(item.category)}   ·   Espaços: ${item.space}`
+                : item.inventoryCategory === "protecao" && Number.isInteger(item.defense)
+                    ? `Defesa: +${item.defense}`
+                : INVENTORY_CATEGORIES[item.inventoryCategory] || "Itens";
+            toggle.append(name, summary);
+            const panel = document.createElement("div");
+            panel.id = `catalog-item-details-${index}`;
+            panel.className = "catalog-item__details";
+            panel.hidden = true;
+            panel.setAttribute("role", "region");
+            panel.setAttribute("aria-labelledby", toggle.id);
+            toggle.addEventListener("click", () => {
+                const wasOpen = toggle.getAttribute("aria-expanded") === "true";
+                if (openToggle && openToggle !== toggle) {
+                    openToggle.setAttribute("aria-expanded", "false");
+                    openPanel.hidden = true;
+                }
+                toggle.setAttribute("aria-expanded", String(!wasOpen));
+                panel.hidden = wasOpen;
+                openToggle = wasOpen ? null : toggle;
+                openPanel = wasOpen ? null : panel;
+            });
+            if (item.weaponClass) {
+                const classification = document.createElement("p");
+                classification.className = "catalog-item__classification";
+                classification.textContent = [item.weaponClass, item.weaponStyle, item.hands, item.weaponTraits].filter(Boolean).join(" · ");
+                panel.append(classification);
+            } else if (["municoes", "geral", "amaldicoados"].includes(item.inventoryCategory)) {
+                const classification = document.createElement("p");
+                classification.className = "catalog-item__classification";
+                classification.textContent = item.element || item.itemType || INVENTORY_CATEGORIES[item.inventoryCategory];
+                panel.append(classification);
+            }
+            if (item.inventoryCategory === "armas" || item.inventoryCategory === "protecao") {
+                const facts = document.createElement("dl");
+                facts.className = "catalog-item__facts";
+                const addFact = (label, value) => {
+                    if (value === undefined || value === null || value === "") return;
+                    const pair = document.createElement("div");
+                    const term = document.createElement("dt");
+                    const definition = document.createElement("dd");
+                    term.textContent = label;
+                    definition.textContent = String(value);
+                    pair.append(term, definition);
+                    facts.append(pair);
+                };
+                addFact("Categoria", bookCategoryLabel(item.category));
+                if (item.inventoryCategory === "armas") {
+                    addFact("Alcance", item.range);
+                    addFact("Tipo", item.damageType);
+                }
+                addFact("Espaços", item.space);
+                if (item.inventoryCategory === "armas") addFact("Munição", item.ammunition);
+                panel.append(facts);
+            }
+            if (item.description) {
+                const description = document.createElement("p");
+                description.className = "catalog-item__description";
+                description.textContent = item.description;
+                panel.append(description);
+            }
+            const add = document.createElement("button");
+            add.type = "button";
+            add.className = "button button--primary";
+            add.textContent = "Adicionar ao inventário";
+            add.setAttribute("aria-label", `Adicionar ${item.name} ao inventário`);
+            add.addEventListener("click", () => addCatalogItem(item));
+            panel.append(add);
+            row.append(toggle, panel);
+            list.append(row);
+        });
+    }
+    $("openCatalog").addEventListener("click", () => {
+        renderCatalog();
+        catalogDialog.showModal();
+    });
+    $("closeCatalog").addEventListener("click", () => catalogDialog.close());
     document.querySelectorAll("[data-add-entry]").forEach((button) => {
         button.addEventListener("click", () => {
             entryKind = button.dataset.addEntry;
-            $("entryDialogTitle").textContent = entryKind === "inventario" ? "Adicionar ao inventário" : `Adicionar ${ENTRY_TYPES[entryKind].singular}`;
+            $("entryDialogTitle").textContent = entryKind === "inventario" ? "Criar item" : `Adicionar ${ENTRY_TYPES[entryKind].singular}`;
+            $("entrySubmit").textContent = entryKind === "inventario" ? "Criar item" : `Adicionar ${ENTRY_TYPES[entryKind].singular}`;
             $("entryCategoryField").hidden = entryKind !== "inventario";
             $("entryForm").reset();
             if (entryKind === "inventario") $("entryCategory").value = inventoryFilter === "todos" ? "itens" : inventoryFilter;
@@ -604,11 +1151,11 @@ function updateInventoryFilters() {
 function skillSettings(skill) {
     const data = sheetData();
     if (!data.skills || typeof data.skills !== "object" || Array.isArray(data.skills)) data.skills = {};
-    const saved = data.skills[skill.id] || {};
+    const saved = data.skills[skill.id] && typeof data.skills[skill.id] === "object" && !Array.isArray(data.skills[skill.id]) ? data.skills[skill.id] : {};
     const attribute = ATTRIBUTES.some((item) => item.id === saved.attribute) ? saved.attribute : skill.attribute;
     const training = TRAINING_VALUES.includes(saved.training) ? saved.training : 0;
     const other = Number.isFinite(saved.other) ? Math.max(-1000, Math.min(1000, saved.other)) : 0;
-    data.skills[skill.id] = { attribute, training, other };
+    data.skills[skill.id] = Object.assign(saved, { attribute, training, other });
     return data.skills[skill.id];
 }
 
@@ -669,6 +1216,7 @@ function setupOriginTraining() {
             sheetData().originSkillChoices = selects.map((field) => field.value);
             $("originTrainingMessage").textContent = selected.length === 2 ? "As duas perícias da origem estão treinadas." : "Falta escolher uma perícia da origem.";
             setupSkills();
+            refreshCombatForAttributes();
             persistSheet();
         });
     });
@@ -773,17 +1321,16 @@ function showDiceResult(skill, dice, chosenIndex, bonus, useLowest) {
 }
 
 function rollSkill(skill, settings) {
-    const training = effectiveTraining(skill.id, settings);
     const attributeValue = character.attributes?.[settings.attribute];
-    if (!Number.isInteger(attributeValue) || attributeValue < 0 || attributeValue > 5) {
-        showRollError(`O atributo de ${skill.name} ainda não tem um valor salvo. Revise a criação da ficha.`);
+    if (!validAttribute(attributeValue)) {
+        showRollError(`O atributo de ${skill.name} ainda não tem um valor válido. Edite a roda de atributos da ficha.`);
         return;
     }
-    const diceCount = attributeValue === 0 ? 2 : attributeValue;
+    const diceCount = attributeValue > 0 ? attributeValue : attributeValue === 0 ? 2 : 1 - attributeValue;
     const dice = Array.from({ length: diceCount }, () => Math.floor(Math.random() * 20) + 1);
-    const useLowest = attributeValue === 0;
+    const useLowest = attributeValue <= 0;
     const chosenIndex = dice.indexOf(useLowest ? Math.min(...dice) : Math.max(...dice));
-    const bonus = training + settings.other;
+    const bonus = skillBonus(skill, settings);
     showDiceResult(skill, dice, chosenIndex, bonus, useLowest);
 }
 
@@ -837,13 +1384,14 @@ function setupSkills() {
         const count = document.createElement("small");
         function updateCount() {
             const value = character.attributes?.[settings.attribute];
-            count.textContent = Number.isInteger(value) && value >= 0 && value <= 5 ? `${value === 0 ? 2 : value}d20${value === 0 ? " ↓" : ""}` : "—";
+            count.textContent = validAttribute(value) ? `${value > 0 ? value : value === 0 ? 2 : 1 - value}d20${value <= 0 ? " ↓" : ""}` : "—";
         }
         updateCount();
         attribute.addEventListener("change", () => {
             if (!ATTRIBUTES.some((item) => item.id === attribute.value)) return;
             settings.attribute = attribute.value;
             updateCount();
+            refreshCombatForAttributes();
             persistSheet();
         });
         dataGroup.append(attribute, count);
@@ -853,7 +1401,10 @@ function setupSkills() {
         bonusCell.dataset.label = "Bônus";
         const bonus = document.createElement("output");
         bonus.className = "skill-bonus";
-        function updateBonus() { bonus.textContent = formatBonus(effectiveTraining(skill.id, settings) + settings.other); }
+        function updateBonus(refreshCombat = false) {
+            bonus.textContent = formatBonus(skillBonus(skill, settings));
+            if (refreshCombat) refreshCombatForAttributes();
+        }
         updateBonus();
         bonusCell.append(bonus);
 
@@ -878,7 +1429,7 @@ function setupSkills() {
             }
             settings.training = next;
             row.dataset.trained = String(effectiveTraining(skill.id, settings) > 0);
-            updateBonus();
+            updateBonus(true);
             persistSheet();
         });
         trainingCell.append(training);
@@ -896,13 +1447,13 @@ function setupSkills() {
         other.addEventListener("input", () => {
             if (!other.value.trim() || !Number.isFinite(Number(other.value))) return;
             settings.other = Math.max(-1000, Math.min(1000, Number(other.value)));
-            updateBonus();
+            updateBonus(true);
             scheduleSheetSave();
         });
         other.addEventListener("change", () => {
             settings.other = other.value.trim() && Number.isFinite(Number(other.value)) ? Math.max(-1000, Math.min(1000, Number(other.value))) : 0;
             other.value = String(settings.other);
-            updateBonus();
+            updateBonus(true);
             persistSheet();
         });
         otherCell.append(other);
@@ -1018,10 +1569,15 @@ function renderNote(note) {
 
 if (character) {
     setupSheetTabs();
-    setupNexResources();
+    refreshResourcesForAttributes = setupNexResources();
     setupTabs("[data-description-tab]", "descriptionTab", "textos");
     setupSheetEntries();
     setupNoteBoard();
     setupOriginTraining();
     setupSkills();
+    refreshSkillsForAttributes = setupSkills;
+    refreshCombatForAttributes = () => { renderEquippedWeapon(); renderDefenses(); };
+    setupDefenseAdjustments();
+    refreshCombatForAttributes();
+    setupAttributeEditing();
 }

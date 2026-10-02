@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Mesa dos jogadores | R.E.A.L</title>
-    <link rel="stylesheet" href="tabletop-guest.css?v=20260928-live-tabletop">
+    <link rel="stylesheet" href="tabletop-guest.css?v=20260929-resizable-documents">
     <link rel="stylesheet" href="visitor-name.css?v=20260928-visitor">
     <script src="visitor-name.js?v=20260928-visitor"></script>
 </head>
@@ -24,10 +24,36 @@
                 <p>A cena aparecerá aqui quando a transmissão começar.</p>
             </div>
         </div>
+        <button id="guestDocumentOpen" class="guest-document__open" type="button" hidden>Ver pista revelada</button>
+        <dialog id="guestDocument" class="guest-document" aria-labelledby="guestDocumentTitle">
+            <div id="guestDocumentHandle" class="guest-document__head" tabindex="0" aria-label="Mover janela da pista. Arraste ou use as setas do teclado.">
+                <span>PISTA REVELADA <small>Arraste o topo para mover · bordas para ajustar</small></span>
+                <div class="guest-document__tools">
+                    <button id="guestDocumentClose" type="button" aria-label="Fechar janela da pista">×</button>
+                </div>
+            </div>
+            <div class="guest-document__body">
+                <h2 id="guestDocumentTitle"></h2>
+                <div id="guestDocumentContent" class="guest-document__content"><p id="guestDocumentText" hidden></p><img id="guestDocumentImage" alt="" hidden></div>
+                <div id="guestDocumentPages" class="guest-document__pages" hidden>
+                    <button id="guestDocumentPrevious" type="button">Anterior</button>
+                    <span id="guestDocumentPageStatus" aria-live="polite"></span>
+                    <button id="guestDocumentNext" type="button">Próxima</button>
+                </div>
+            </div>
+            <button class="guest-document__resize guest-document__resize--n" type="button" data-document-resize="n" aria-label="Redimensionar janela pelo topo"></button>
+            <button class="guest-document__resize guest-document__resize--e" type="button" data-document-resize="e" aria-label="Redimensionar janela pela direita"></button>
+            <button class="guest-document__resize guest-document__resize--s" type="button" data-document-resize="s" aria-label="Redimensionar janela por baixo"></button>
+            <button class="guest-document__resize guest-document__resize--w" type="button" data-document-resize="w" aria-label="Redimensionar janela pela esquerda"></button>
+            <button class="guest-document__resize guest-document__resize--ne" type="button" data-document-resize="ne" aria-label="Redimensionar janela pelo canto superior direito"></button>
+            <button class="guest-document__resize guest-document__resize--se" type="button" data-document-resize="se" aria-label="Redimensionar janela pelo canto inferior direito"></button>
+            <button class="guest-document__resize guest-document__resize--sw" type="button" data-document-resize="sw" aria-label="Redimensionar janela pelo canto inferior esquerdo"></button>
+            <button class="guest-document__resize guest-document__resize--nw" type="button" data-document-resize="nw" aria-label="Redimensionar janela pelo canto superior esquerdo"></button>
+        </dialog>
         <p class="guest-tabletop__note">Esta é uma visão somente para observar. O mestre controla o mapa e os tokens.</p>
     </main>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.3/dist/umd/supabase.js"></script>
     <script src="supabase-config.js?v=20260928-online-tabletop"></script>
-    <script src="tabletop-guest.js?v=20260928-presence"></script>
+    <script src="tabletop-guest.js?v=20260929-resizable-documents"></script>
 </body>
 </html>

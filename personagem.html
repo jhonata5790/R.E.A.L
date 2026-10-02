@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#111113">
     <title>Ficha de personagem | R.E.A.L</title>
-    <link rel="stylesheet" href="personagem.css?v=20260927-nex-resources">
+    <link rel="stylesheet" href="personagem.css?v=20260930-combat">
     <link rel="stylesheet" href="visitor-name.css?v=20260928-visitor">
     <script src="visitor-name.js?v=20260928-visitor"></script>
 </head>
@@ -35,13 +35,13 @@
 
             <nav id="sheetTabs" class="sheet-tabs" role="tablist" aria-label="Seções da ficha">
                 <button id="tab-informacoes" type="button" role="tab" aria-controls="panel-informacoes" data-sheet-tab="informacoes">Informações</button>
-                <button id="tab-descricoes" type="button" role="tab" aria-controls="panel-descricoes" data-sheet-tab="descricoes">Descrições</button>
                 <button id="tab-atributos" type="button" role="tab" aria-controls="panel-atributos" data-sheet-tab="atributos">Atributos</button>
                 <button id="tab-pericias" type="button" role="tab" aria-controls="panel-pericias" data-sheet-tab="pericias">Perícias</button>
                 <button id="tab-combate" type="button" role="tab" aria-controls="panel-combate" data-sheet-tab="combate">Combate</button>
                 <button id="tab-inventario" type="button" role="tab" aria-controls="panel-inventario" data-sheet-tab="inventario">Inventário</button>
                 <button id="tab-habilidades" type="button" role="tab" aria-controls="panel-habilidades" data-sheet-tab="habilidades">Habilidades</button>
                 <button id="tab-rituais" type="button" role="tab" aria-controls="panel-rituais" data-sheet-tab="rituais">Rituais</button>
+                <button id="tab-descricoes" type="button" role="tab" aria-controls="panel-descricoes" data-sheet-tab="descricoes">Descrições</button>
             </nav>
 
             <section id="panel-informacoes" class="sheet-panel" role="tabpanel" aria-labelledby="tab-informacoes">
@@ -88,9 +88,10 @@
                     <div class="attribute-display">
                     <figure class="attribute-wheel" aria-label="Roda de atributos do personagem">
                         <img id="attributeWheelImage" src="assets/atributos-indefinido.png" alt="Roda com Agilidade, Força, Intelecto, Presença e Vigor" width="1254" height="1254">
-                        <div id="attributeWheelValues" class="attribute-wheel__values" aria-hidden="true"></div>
+                        <div id="attributeWheelValues" class="attribute-wheel__values" role="group" aria-label="Valores dos atributos"></div>
+                        <button id="toggleAttributeEdit" class="attribute-wheel__edit" type="button" aria-label="Editar atributos" aria-pressed="false" title="Editar atributos">✎</button>
                     </figure>
-                    <dl id="attributeList" class="attribute-list" aria-label="Valores dos atributos"></dl>
+                    <p id="attributeEditHint" class="attribute-edit-hint" role="status" aria-live="polite" hidden>Selecione um atributo na roda, digite um inteiro de −100 a 100 e pressione Enter. Clique no lápis novamente para concluir.</p>
                     </div>
                     <div class="attribute-details">
                         <div class="stat-grid">
@@ -116,17 +117,28 @@
                                 <progress id="sanidadeProgress" max="1" value="0" aria-label="Sanidade restante"></progress>
                             </section>
                         </div>
-                        <details class="resource-adjustments"><summary>Ajustes de máximos para poderes, itens ou regras da mesa</summary><div class="resource-adjustments__fields"><label>Vida<input id="vidaBonus" type="number" min="-999" max="999" step="1" inputmode="numeric" aria-label="Ajuste do máximo de Vida"></label><label>Esforço<input id="esforcoBonus" type="number" min="-999" max="999" step="1" inputmode="numeric" aria-label="Ajuste do máximo de Esforço"></label><label>Sanidade<input id="sanidadeBonus" type="number" min="-999" max="999" step="1" inputmode="numeric" aria-label="Ajuste do máximo de Sanidade"></label></div></details>
                         <p id="resourceMessage" class="resource-message" role="status" aria-live="polite"></p>
-                        <dl class="defense-list">
-                            <div><dt>Defesa</dt><dd>—</dd></div>
-                            <div><dt>Bloqueio</dt><dd>—</dd></div>
-                            <div><dt>Esquiva</dt><dd>—</dd></div>
-                            <div><dt>Proteção</dt><dd>—</dd></div>
-                            <div><dt>Resistência</dt><dd>—</dd></div>
-                            <div><dt>Proficiências</dt><dd>—</dd></div>
-                        </dl>
-                        <p class="pending-note">Trilhas, poderes e alterações de proteção ou resistência ainda são registrados manualmente. Use os ajustes de máximos quando algum efeito mudar PV, PE ou SAN.</p>
+                        <details class="attribute-more">
+                            <summary>Defesa, proteção e ajustes</summary>
+                            <dl class="defense-list">
+                                <div><dt>Defesa</dt><dd id="defenseValue">—</dd></div>
+                                <div><dt>Bloqueio (RD)</dt><dd id="blockValue">—</dd></div>
+                                <div><dt>Esquiva</dt><dd id="dodgeValue">—</dd></div>
+                                <div><dt>Proteção</dt><dd id="protectionValue">—</dd></div>
+                                <div><dt>Resistência</dt><dd id="resistanceValue">—</dd></div>
+                                <div><dt>Proficiências</dt><dd id="proficiencyValue">—</dd></div>
+                            </dl>
+                            <p id="defenseExplanation" class="pending-note"></p>
+                            <details class="resource-adjustments"><summary>Ajustes de combate</summary><div class="combat-settings">
+                                <label>Outros em Defesa<input id="defenseBonus" type="number" min="-1000" max="1000" step="1"></label>
+                                <label>Outros em Bloqueio<input id="blockBonus" type="number" min="-1000" max="1000" step="1"></label>
+                                <label>Outros em Esquiva<input id="dodgeBonus" type="number" min="-1000" max="1000" step="1"></label>
+                                <label>Outras resistências<input id="resistanceNotes" maxlength="200" placeholder="Ex.: fogo 5"></label>
+                                <label>Proficiências<input id="proficiencyNotes" maxlength="200" placeholder="Armas e proteções"></label>
+                            </div></details>
+                            <details class="resource-adjustments"><summary>Ajustes de máximos para poderes, itens ou regras da mesa</summary><div class="resource-adjustments__fields"><label>Vida<input id="vidaBonus" type="number" min="-999" max="999" step="1" inputmode="numeric" aria-label="Ajuste do máximo de Vida"></label><label>Esforço<input id="esforcoBonus" type="number" min="-999" max="999" step="1" inputmode="numeric" aria-label="Ajuste do máximo de Esforço"></label><label>Sanidade<input id="sanidadeBonus" type="number" min="-999" max="999" step="1" inputmode="numeric" aria-label="Ajuste do máximo de Sanidade"></label></div></details>
+                            <p class="pending-note">Proteções equipadas entram na Defesa. Poderes, maldições e efeitos condicionais usam os ajustes manuais. Proficiências não são verificadas automaticamente.</p>
+                        </details>
                     </div>
                 </div>
             </section>
@@ -154,18 +166,21 @@
             <section id="panel-combate" class="sheet-panel" role="tabpanel" aria-labelledby="tab-combate" hidden>
                 <div class="section-heading"><span class="eyebrow">EM CONFRONTO</span><h2>Combate</h2></div>
                 <div class="combat-equipped"><h3>Arma equipada</h3><div id="equippedWeapon" aria-live="polite"></div></div>
+                <p class="pending-note">O ataque usa os dados da ficha. Compare o total com a Defesa do alvo; uma ameaça de crítico não confirma um acerto. Munição, ações, PE e efeitos especiais não são consumidos automaticamente.</p>
             </section>
             <section id="panel-inventario" class="sheet-panel" role="tabpanel" aria-labelledby="tab-inventario" hidden>
                 <div class="section-heading"><span class="eyebrow">O QUE CARREGA</span><h2>Inventário</h2></div>
-                <div class="section-actions"><p>Itens, armas, proteção, objetos gerais e itens amaldiçoados ficam organizados aqui.</p><button type="button" class="button button--primary" data-add-entry="inventario">+ Adicionar ao inventário</button></div>
+                <div class="section-actions"><p>Armas, munições, proteção, objetos gerais e itens amaldiçoados ficam organizados aqui.</p><div class="section-actions__buttons"><button type="button" class="button button--ghost" data-add-entry="inventario">Criar item</button><button id="openCatalog" type="button" class="button button--primary">Adicionar item</button></div></div>
                 <nav class="inventory-filters" aria-label="Filtrar inventário">
                     <button type="button" data-inventory-filter="todos">Todos</button>
                     <button type="button" data-inventory-filter="itens">Itens</button>
                     <button type="button" data-inventory-filter="armas">Armas</button>
+                    <button type="button" data-inventory-filter="municoes">Munições</button>
                     <button type="button" data-inventory-filter="protecao">Proteção</button>
                     <button type="button" data-inventory-filter="geral">Geral</button>
                     <button type="button" data-inventory-filter="amaldicoados">Amaldiçoados</button>
                 </nav>
+                <p id="equipmentMessage" class="origin-training-message" role="status" aria-live="polite"></p>
                 <div id="inventoryList" class="entry-list entry-list--accordion"></div>
             </section>
             <section id="panel-habilidades" class="sheet-panel" role="tabpanel" aria-labelledby="tab-habilidades" hidden>
@@ -191,16 +206,25 @@
             <label>Nome<input id="entryName" name="name" maxlength="100" required></label>
             <label id="entryCategoryField" hidden>Categoria
                 <select id="entryCategory" name="category">
-                    <option value="itens">Itens</option><option value="armas">Armas</option><option value="protecao">Proteção</option><option value="geral">Geral</option><option value="amaldicoados">Itens amaldiçoados</option>
+                    <option value="itens">Itens</option><option value="armas">Armas</option><option value="municoes">Munições</option><option value="protecao">Proteção</option><option value="geral">Geral</option><option value="amaldicoados">Itens amaldiçoados</option>
                 </select>
             </label>
             <label>Descrição<textarea id="entryDescription" name="description" rows="4" maxlength="2000" placeholder="Detalhes para lembrar durante o jogo"></textarea></label>
-            <div class="entry-dialog__actions"><button id="cancelEntry" type="button" class="button button--ghost">Cancelar</button><button type="submit" class="button button--primary">Adicionar</button></div>
+            <div class="entry-dialog__actions"><button id="cancelEntry" type="button" class="button button--ghost">Cancelar</button><button id="entrySubmit" type="submit" class="button button--primary">Adicionar</button></div>
         </form>
+    </dialog>
+    <dialog id="catalogDialog" class="entry-dialog catalog-dialog" aria-labelledby="catalogDialogTitle">
+        <div class="catalog-dialog__header"><div><span class="eyebrow">ITENS DO LIVRO</span><h2 id="catalogDialogTitle">Catálogo de itens</h2></div><button id="closeCatalog" type="button" class="button button--ghost">Fechar</button></div>
+        <div id="catalogCollections" class="catalog-collections" role="group" aria-label="Livros do catálogo"></div>
+        <nav id="catalogCategories" class="catalog-categories" aria-label="Categorias do catálogo"></nav>
+        <h3 id="catalogGroupTitle" class="catalog-group-title"></h3>
+        <div id="catalogList" class="catalog-list"></div>
     </dialog>
     <script src="attribute-themes.js?v=20260922-attribute-themes-final"></script>
     <script src="nex-rules.js?v=20260927-nex-resources"></script>
     <script src="origins.js?v=20260924-origin-training"></script>
-    <script src="personagem.js?v=20260927-nex-resources"></script>
+    <script src="equipment-catalog.js?v=20260930-cursed-items"></script>
+    <script src="equipment-rules.js?v=20260930-combat"></script>
+    <script src="personagem.js?v=20260930-combat"></script>
 </body>
 </html>

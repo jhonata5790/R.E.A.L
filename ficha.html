@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#100b12">
     <title>Criar ficha | R.E.A.L</title>
-    <link rel="stylesheet" href="ficha.css?v=20260924-real-brand">
+    <link rel="stylesheet" href="ficha.css?v=20260929-class-first">
     <link rel="stylesheet" href="visitor-name.css?v=20260928-visitor">
     <script src="visitor-name.js?v=20260928-visitor"></script>
 </head>
@@ -23,19 +23,26 @@
         </div>
 
         <nav class="stepper" aria-label="Etapas da ficha">
-            <button type="button" data-step-button="0"><span>01</span> Atributos</button>
-            <button type="button" data-step-button="1"><span>02</span> Origem</button>
-            <button type="button" data-step-button="2"><span>03</span> Classe</button>
+            <button type="button" data-step-button="0"><span>01</span> Classe</button>
+            <button type="button" data-step-button="1"><span>02</span> Atributos</button>
+            <button type="button" data-step-button="2"><span>03</span> Origem</button>
             <button type="button" data-step-button="3"><span>04</span> Toques finais</button>
         </nav>
 
         <form id="sheetForm" novalidate>
-            <section class="sheet-step sheet-step--attributes" data-step="0" aria-labelledby="attributesTitle">
+            <section class="sheet-step" data-step="0" aria-labelledby="classTitle">
+                <div class="step-heading"><span class="eyebrow">ETAPA 01 / 04</span><h2 id="classTitle">Qual é a sua classe?</h2><p>Escolha Combatente, Especialista ou Ocultista para começar com 4 pontos de atributos. Mundano começa com 3.</p></div>
+                <div id="classList" class="class-options"></div>
+                <p id="classError" class="step-error" role="alert" hidden></p>
+            </section>
+
+            <section class="sheet-step sheet-step--attributes" data-step="1" aria-labelledby="attributesTitle" hidden>
                 <div class="attributes-layout">
                     <div class="attributes-panel">
-                        <div class="step-heading"><span class="eyebrow">ETAPA 01 / 04</span><h2 id="attributesTitle">Escolha seus atributos</h2><p>Todo atributo começa em 1. Distribua 4 pontos. Você pode reduzir um atributo a 0 para ganhar mais 1 ponto; o máximo de cada um é 5.</p></div>
+                        <div class="step-heading"><span class="eyebrow">ETAPA 02 / 04</span><h2 id="attributesTitle">Escolha seus atributos</h2><p id="attributeRules">Todo atributo começa em 1. Você pode reduzir quantos quiser a 0 para ganhar pontos. O máximo inicial de cada um é 3.</p></div>
                         <p id="attributeThemeLabel" class="attribute-theme-label">Classe ainda não definida</p>
-                        <div class="attribute-budget"><span>Pontos para distribuir</span><strong id="pointsRemaining" aria-live="polite">4</strong></div>
+                        <div class="attribute-budget"><span>Pontos para distribuir</span><strong id="pointsRemaining" aria-live="polite">0</strong></div>
+                        <p id="attributeBudgetHint" class="attribute-budget-hint" role="status" aria-live="polite"></p>
                         <div class="attribute-selection" aria-labelledby="selectedAttributeName">
                             <span class="attribute-selection__eyebrow">ATRIBUTO SELECIONADO</span>
                             <h3 id="selectedAttributeName">Agilidade</h3>
@@ -56,16 +63,10 @@
                 <p id="attributesError" class="step-error" role="alert" hidden></p>
             </section>
 
-            <section class="sheet-step" data-step="1" aria-labelledby="originTitle" hidden>
-                <div class="step-heading"><span class="eyebrow">ETAPA 02 / 04</span><h2 id="originTitle">De onde você veio?</h2><p>Sua origem representa a vida antes da campanha. Escolha uma para ver suas perícias e habilidade.</p></div>
+            <section class="sheet-step" data-step="2" aria-labelledby="originTitle" hidden>
+                <div class="step-heading"><span class="eyebrow">ETAPA 03 / 04</span><h2 id="originTitle">De onde você veio?</h2><p>Sua origem representa a vida antes da campanha. Escolha uma para ver suas perícias e habilidade.</p></div>
                 <div id="originList" class="origin-list"></div>
                 <p id="originError" class="step-error" role="alert" hidden></p>
-            </section>
-
-            <section class="sheet-step" data-step="2" aria-labelledby="classTitle" hidden>
-                <div class="step-heading"><span class="eyebrow">ETAPA 03 / 04</span><h2 id="classTitle">Qual é a sua classe?</h2><p>Escolha Combatente, Especialista ou Ocultista. Se o personagem ainda é uma pessoa comum, escolha Mundano.</p></div>
-                <div id="classList" class="class-options"></div>
-                <p id="classError" class="step-error" role="alert" hidden></p>
             </section>
 
             <section class="sheet-step" data-step="3" aria-labelledby="finalTitle" hidden>
@@ -96,6 +97,6 @@
     <script src="attribute-themes.js?v=20260922-attribute-themes-final"></script>
     <script src="nex-rules.js?v=20260927-nex-resources"></script>
     <script src="origins.js?v=20260924-origin-training"></script>
-    <script src="ficha.js?v=20260927-nex-resources"></script>
+    <script src="ficha.js?v=20260929-class-first"></script>
 </body>
 </html>
