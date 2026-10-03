@@ -1,0 +1,30 @@
+const assert = require("node:assert/strict");
+const mechanics = require("../sheet-mechanics.js");
+const abilities = require("../ability-catalog.js");
+const entry = (name, affinity = false) => abilities.entry(abilities.catalog.find(item => item.name === name), name, affinity);
+const effects = (entries, extra = {}) => mechanics.effects({ entries, catalog: abilities.catalog, level: 8, ...extra });
+assert.equal(effects([entry("Sangue de Ferro")]).resources.vida, 16);
+assert.equal(effects([entry("Sangue de Ferro"), entry("Sangue de Ferro", true)]).resources.vida, 16, "não duplica base e afinidade");
+assert.equal(effects([entry("Sangue de Ferro", true)]).skills.fortitude, 5);
+assert.equal(effects([entry("Potencial Aprimorado", true)]).resources.esforco, 16);
+assert.equal(effects([entry("Sensitivo")]).skills.diplomacia, 5);
+const defense = effects([entry("Reflexos Defensivos"), entry("Precognição")]);
+assert.equal(defense.defense, 4); assert.equal(defense.skills.vontade, 4);
+assert.equal(effects([entry("Golpe de Sorte", true)]).criticalMultiplier, 1);
+assert.equal(effects([{ name: "Sangue de Ferro" }]).resources.vida, 0, "não interpreta nomes de habilidades personalizadas");
+assert.equal(effects([entry("Encarar a Morte")]).perTurn, 0, "bônus condicionado à cena não é permanente");
+assert.equal(effects([], { originAbility: "Dedicação", level: 3 }).resources.esforco, 2);
+assert.equal(effects([], { originAbility: "Dedicação", level: 4 }).resources.esforco, 2);
+assert.equal(effects([], { originAbility: "Dedicação", level: 5 }).resources.esforco, 3);
+assert.deepEqual(effects([entry("Sangue de Ferro")], { enabled: false }).applied, []);
+assert.equal(mechanics.rollExpression("2d6+1d8+3", 2, () => 0).total, 8);
+assert.equal(mechanics.rollExpression("2d6-1d4-10", 0, () => 0).total, -9);
+assert.equal(mechanics.rollExpression(" 2D6 + 3 ", 0, () => 0.999).total, 15);
+let randomCalls = 0;
+for (const text of ["", "1d1", "501d6", "2d1001", "2d6+500d8", "2d6++3", "alert(1)", "1d6;fetch('x')", "3"]) {
+    assert.equal(mechanics.rollExpression(text, 0, () => { randomCalls++; return 0; }), null, text);
+}
+assert.equal(randomCalls, 0, "valida toda a expressão antes de rolar");
+assert.equal(mechanics.ritualDice.Cicatrização.verdadeiro, "7d8+7");
+assert.equal(mechanics.ritualDice["Miasma Entrópico"].verdadeiro, "4d8", "não herda dano discente se verdadeiro só altera duração");
+console.log("Mecânicas: poderes permanentes, afinidade, dados livres e formas de rituais: OK");

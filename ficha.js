@@ -47,7 +47,7 @@ const attributes = Object.fromEntries(ATTRIBUTES.map(({ id }) => {
     const stored = existing?.attributes?.[id];
     return [id, Number.isInteger(stored) && stored >= 0 && stored <= 5 ? stored : 1];
 }));
-let origin = normalizedChoice(existing?.origin, ORIGINS);
+let origin = normalizedChoice(existing?.origin, ORIGINS) || normalizedChoice(existing?.originName, ORIGINS);
 let characterClass = normalizedChoice(existing?.class || existing?.role, CLASSES);
 const originalClass = characterClass;
 const originalAttributes = { ...attributes };
@@ -264,6 +264,21 @@ function renderOrigins() {
     });
     updateOriginSelection();
     if (existing && origin) setOpenOrigin(origin);
+    $("originSearch").addEventListener("input", filterOrigins);
+    filterOrigins();
+}
+
+function filterOrigins() {
+    const normalize = value => String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR");
+    const query = normalize($("originSearch").value.trim());
+    let count = 0;
+    for (const option of ORIGINS) {
+        const visible = normalize([option.name, option.skills, option.ability, option.description, option.effect].join(" ")).includes(query);
+        originItems.get(option.id).item.hidden = !visible;
+        if (visible) count++;
+        else if (openOriginId === option.id) setOpenOrigin(null);
+    }
+    $("originSearchResult").textContent = count ? `${count} de ${ORIGINS.length} origens${query ? " encontradas" : " do Livro de Regras"}.` : "Nenhuma origem encontrada. Tente outro nome, perícia ou habilidade.";
 }
 
 function setOpenOrigin(id) {
@@ -288,6 +303,8 @@ function updateOriginSelection() {
         choose.disabled = selected;
         choose.textContent = selected ? "Origem escolhida" : "Escolher esta origem";
     });
+    const selected = ORIGINS.find(option => option.id === origin);
+    $("originSelectionSummary").textContent = selected ? `Origem escolhida: ${selected.name}. Perícias: ${selected.skills}. Habilidade: ${selected.ability}.` : "Nenhuma origem escolhida ainda. Abrir um cartão não o seleciona.";
 }
 
 function renderClasses() {

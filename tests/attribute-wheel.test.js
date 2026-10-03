@@ -61,6 +61,7 @@ function openSheet(saved, search = "", failedImages = []) {
         "pointsRemaining", "selectedAttributeName", "selectedAttributeDescription",
         "selectedAttributeValue", "decreaseAttribute", "increaseAttribute",
         "originList", "classList", "sheetSummary", "previousStep", "nextStep",
+        "originSearch", "originSearchResult", "originSelectionSummary",
         "saveCharacter", "deleteCharacter", "pageTitle", "pageDescription",
         "characterName", "sheetForm"
     ].map((id) => [id, new Element()]));
@@ -123,8 +124,8 @@ async function main() {
     assert.equal(ids.attributeThemeLabel.textContent, "Classe ainda não definida");
     assert.equal(ids.attributeWheelImage.src, "assets/atributos-indefinido.png");
     for (const target of ids.attributeWheelTargets.children) assert.equal(target.tag, "button");
-    assert.equal(ids.originList.children.length, 3);
-    for (const [index, name] of ["Criminoso", "Amnésico", "Cultista Arrependido"].entries()) {
+    assert.equal(ids.originList.children.length, 26);
+    for (const [index, name] of require("../origins.js").map(origin => origin.name).entries()) {
         const { item, header, panel, badge, choose } = originAt(ids, index);
         assert.equal(item.tag, "article", "o item externo não é um botão");
         assert.equal(header.tag, "button");
@@ -223,8 +224,8 @@ async function main() {
     ids.nextStep.click();
     assert.equal(sections[2].hidden, false, "não avança sem escolher origem");
     assert.equal(ids.originError.textContent, "Escolha uma origem para continuar.");
-    const firstOrigin = originAt(ids, 0);
-    const secondOrigin = originAt(ids, 1);
+    const firstOrigin = originAt(ids, 6);
+    const secondOrigin = originAt(ids, 2);
     firstOrigin.header.click();
     assert.equal(firstOrigin.header.getAttribute("aria-expanded"), "true");
     assert.equal(firstOrigin.panel.inert, false);
@@ -304,12 +305,47 @@ async function main() {
     assert.equal(edit.ids.selectedAttributeValue.textContent, 3);
     assert.equal(edit.ids.classList.children[0].children[0].dataset.selected, "true", "edição preserva classe selecionada");
     assert.equal(edit.ids.classList.children[0].children[0].children[2].getAttribute("aria-pressed"), "true");
-    const editedOrigin = originAt(edit.ids, 1);
+    const editedOrigin = originAt(edit.ids, 2);
     assert.equal(editedOrigin.item.dataset.selected, "true");
     assert.equal(editedOrigin.badge.hidden, false);
     assert.equal(editedOrigin.header.getAttribute("aria-expanded"), "true", "edição abre origem salva");
     assert.equal(editedOrigin.panel.getAttribute("aria-hidden"), "false");
     assert.equal(editedOrigin.choose.textContent, "Origem escolhida");
+
+    const search = (value) => { edit.ids.originSearch.value = value; edit.ids.originSearch.handlers.input(); };
+    search("  POLICIAL  ");
+    assert.equal(edit.ids.originList.children.filter((item) => !item.hidden).length, 1);
+    assert.equal(editedOrigin.header.getAttribute("aria-expanded"), "false", "buscar fecha o cartão oculto");
+    assert.match(edit.ids.originSelectionSummary.textContent, /Amnésico/, "buscar não desfaz a seleção");
+    search("SABER E PODER");
+    assert.equal(edit.ids.originList.children[0].hidden, false, "busca habilidade sem acentos");
+    search("cozinheiro");
+    assert.equal(edit.ids.originList.children[5].hidden, false, "busca a especialidade do Chef");
+    search("pericia inexistente xyz");
+    assert.match(edit.ids.originSearchResult.textContent, /Nenhuma origem encontrada/);
+    assert.equal(edit.ids.originList.children.every((item) => item.hidden), true);
+    search("");
+    assert.equal(edit.ids.originList.children.every((item) => !item.hidden), true);
+    assert.match(edit.ids.originSearchResult.textContent, /26 de 26/);
+
+    for (const [index, option] of require("../origins.js").entries()) {
+        const originEdit = openSheet(saved, "?id=nova-ficha");
+        originAt(originEdit.ids, index).choose.click();
+        originEdit.ids.sheetForm.handlers.submit({ preventDefault() {}, currentTarget: originEdit.ids.sheetForm });
+        const stored = JSON.parse(originEdit.memory.get("cronicas-biblioteca-v2"));
+        assert.equal(stored.characters[0].origin, option.id, `${option.name}: salva o identificador`);
+        assert.equal(stored.characters[0].originName, option.name);
+        const restored = openSheet(stored, "?id=nova-ficha");
+        assert.equal(originAt(restored.ids, index).item.dataset.selected, "true", `${option.name}: restaura a seleção`);
+    }
+    const legacyOrigin = JSON.parse(JSON.stringify(saved));
+    legacyOrigin.characters[0].origin = "id-antigo";
+    legacyOrigin.characters[0].originName = "Policial";
+    legacyOrigin.characters[0].sheet = { inventario: [{ id: "item-preservado" }], skills: { medicina: { training: 10 } } };
+    const legacyOriginEdit = openSheet(legacyOrigin, "?id=nova-ficha");
+    assert.equal(originAt(legacyOriginEdit.ids, 17).item.dataset.selected, "true", "nome legado restaura a origem");
+    legacyOriginEdit.ids.sheetForm.handlers.submit({ preventDefault() {}, currentTarget: legacyOriginEdit.ids.sheetForm });
+    assert.deepEqual(JSON.parse(legacyOriginEdit.memory.get("cronicas-biblioteca-v2")).characters[0].sheet, legacyOrigin.characters[0].sheet, "editar a origem preserva o conteúdo da ficha");
 
     const advancedSaved = JSON.parse(JSON.stringify(saved));
     advancedSaved.characters[0].nex = 50;

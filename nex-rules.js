@@ -1,5 +1,5 @@
-// Progressão padrão de Ordem Paranormal RPG. Suplementos e poderes alteram
-// os totais somente pelos ajustes manuais da ficha.
+// Progressão padrão de Ordem Paranormal RPG. Bônus automáticos conferidos
+// e ajustes manuais são fornecidos separadamente pela ficha.
 (function (scope) {
     const CLASSES = Object.freeze({
         combatente: Object.freeze({ start: { vida: 20, esforco: 2, sanidade: 12 }, gain: { vida: 4, esforco: 2, sanidade: 3 } }),
@@ -24,7 +24,7 @@
         return Number.isInteger(value) ? Math.max(-999, Math.min(999, value)) : 0;
     }
 
-    function calculate({ classId, nex, attributes = {}, origin = "", bonuses = {} }) {
+    function calculate({ classId, nex, attributes = {}, origin = "", bonuses = {}, automaticBonuses = {} }) {
         const rules = CLASSES[classId];
         if (!rules) return null;
         const level = classId === "mundano" ? 1 : AGENT_NEX.indexOf(normalizeNex(classId, nex)) + 1;
@@ -36,7 +36,7 @@
             esforco: rules.start.esforco + presenca + (level - 1) * (rules.gain.esforco + presenca),
             sanidade: (cultist ? Math.floor(rules.start.sanidade / 2) : rules.start.sanidade) + (level - 1) * rules.gain.sanidade
         };
-        for (const id of RESOURCES) maxima[id] = Math.max(0, maxima[id] + clampBonus(bonuses[id]));
+        for (const id of RESOURCES) maxima[id] = Math.max(0, maxima[id] + clampBonus(bonuses[id]) + (Number.isInteger(automaticBonuses[id]) ? automaticBonuses[id] : 0));
         return { nex: normalizeNex(classId, nex), level, pePerTurn: classId === "mundano" ? 1 : level, maxima };
     }
 

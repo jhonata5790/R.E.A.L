@@ -4,6 +4,9 @@ const NEX_RULES = window.REAL_NEX_RULES;
 const EQUIPMENT_CATALOG = window.REAL_EQUIPMENT_CATALOG || [];
 const EQUIPMENT_COLLECTIONS = window.REAL_EQUIPMENT_COLLECTIONS || [];
 const EQUIPMENT_RULES = window.REAL_EQUIPMENT_RULES;
+const ABILITY_CATALOG = window.REAL_ABILITY_CATALOG;
+const RITUAL_CATALOG = window.REAL_RITUAL_CATALOG;
+const SHEET_MECHANICS = window.REAL_SHEET_MECHANICS;
 const ATTRIBUTES = [
     { id: "agilidade", name: "Agilidade" },
     { id: "forca", name: "Força" },
@@ -81,8 +84,8 @@ function renderAttributes(character, theme) {
         const pick = document.createElement("button");
         pick.type = "button";
         pick.className = "attribute-wheel__pick";
-        pick.disabled = true;
-        pick.setAttribute("aria-label", `Editar ${name}, valor ${value}`);
+        pick.disabled = false;
+        pick.setAttribute("aria-label", `Rolar ${name}, valor ${value}`);
         const input = document.createElement("input");
         input.type = "number";
         input.min = "-100";
@@ -129,7 +132,12 @@ function setupAttributeEditing() {
 
     attributeNodes.forEach(({ pick, input }, id) => {
         pick.addEventListener("click", () => {
-            if (!editing) return;
+            if (!editing) {
+                const roll = EQUIPMENT_RULES.rollTest(character.attributes?.[id]);
+                if (!roll) return showRollError("Preencha o valor desse atributo antes de rolar.");
+                showDiceResult({ name: attributeNodes.get(id).name }, roll.dice, roll.chosenIndex, 0, roll.useLowest);
+                return;
+            }
             if (activeId) closeInput(activeId, true);
             activeId = id;
             pick.hidden = true;
@@ -157,7 +165,9 @@ function setupAttributeEditing() {
         toggle.setAttribute("aria-label", editing ? "Concluir edição dos atributos" : "Editar atributos");
         toggle.title = editing ? "Concluir edição" : "Editar atributos";
         hint.hidden = !editing;
-        attributeNodes.forEach(({ pick }) => { pick.disabled = !editing; });
+        attributeNodes.forEach(({ pick, name, number }) => {
+            pick.setAttribute("aria-label", `${editing ? "Editar" : "Rolar"} ${name}, valor ${number.textContent}`);
+        });
     });
 }
 
@@ -393,6 +403,34 @@ function setupNexResources() {
     const allowed = NEX_RULES.allowedNex(classId);
     const selector = $("nexSelect");
     const status = $("resourceMessage");
+    const systemDialog = $("resourceSystemDialog");
+    const data = sheetData();
+    const resourceIds = [...NEX_RULES.RESOURCES, "determinacao"];
+    data.resourceSystem = data.resourceSystem === "determinacao" ? "determinacao" : "esforco-sanidade";
+    function renderSystem() {
+        const determination = data.resourceSystem === "determinacao";
+        $("resourceSystemName").textContent = determination ? "Determinação" : "Esforço e Sanidade";
+        $("effortLimitLabel").textContent = determination ? "PD / turno" : "PE / turno";
+        $("esforcoResource").hidden = determination;
+        $("sanidadeResource").hidden = determination;
+        $("determinacaoResource").hidden = !determination;
+        $("useEffortSanity").setAttribute("aria-pressed", String(!determination));
+        $("useDetermination").setAttribute("aria-pressed", String(determination));
+    }
+    $("chooseResourceSystem").addEventListener("click", () => systemDialog.showModal());
+    $("cancelResourceSystem").addEventListener("click", () => systemDialog.close());
+    for (const [button, system] of [["useEffortSanity", "esforco-sanidade"], ["useDetermination", "determinacao"]]) {
+        $(button).addEventListener("click", () => {
+            const previousSystem = data.resourceSystem;
+            data.resourceSystem = system;
+            if (!persistSheet()) { data.resourceSystem = previousSystem; return; }
+            renderSystem();
+            if (allowed.length) render();
+            systemDialog.close();
+            status.textContent = `Sistema: ${system === "determinacao" ? "Determinação" : "Esforço e Sanidade"}. Os valores anteriores continuam guardados.`;
+        });
+    }
+    renderSystem();
     if (!allowed.length) {
         $("characterNex").textContent = "NEX não definido";
         const option = document.createElement("option");
@@ -406,6 +444,11 @@ function setupNexResources() {
             $(`${id}Decrease`).disabled = true;
             $(`${id}Increase`).disabled = true;
         }
+        $("determinacaoMaxInput").disabled = true;
+        $("determinacaoTurnInput").disabled = true;
+        $("determinacaoCurrent").disabled = true;
+        $("determinacaoDecrease").disabled = true;
+        $("determinacaoIncrease").disabled = true;
         return () => {};
     }
 
@@ -416,19 +459,22 @@ function setupNexResources() {
         selector.append(option);
     }
     character.nex = NEX_RULES.normalizeNex(classId, character.nex);
-    const data = sheetData();
     const previous = data.resources && typeof data.resources === "object" && !Array.isArray(data.resources) ? data.resources : {};
     const resources = {};
-    for (const id of NEX_RULES.RESOURCES) {
+    for (const id of resourceIds) {
         const stored = previous[id] && typeof previous[id] === "object" ? previous[id] : {};
         resources[id] = { current: stored.current, max: stored.max, bonus: NEX_RULES.clampBonus(stored.bonus) };
+        if (id === "determinacao") {
+            resources[id].max = Number.isInteger(stored.max) ? Math.max(0, Math.min(99999, stored.max)) : 0;
+            resources[id].current = Number.isInteger(stored.current) ? Math.max(0, Math.min(resources[id].max, stored.current)) : resources[id].max;
+        }
     }
     data.resources = resources;
     let totals;
 
     function recalculate() {
         const bonuses = Object.fromEntries(NEX_RULES.RESOURCES.map((id) => [id, resources[id].bonus]));
-        totals = NEX_RULES.calculate({ classId, nex: character.nex, attributes: character.attributes, origin: characterOrigin?.id, bonuses });
+        totals = NEX_RULES.calculate({ classId, nex: character.nex, attributes: character.attributes, origin: characterOrigin?.id, bonuses, automaticBonuses: passiveEffects().resources });
         for (const id of NEX_RULES.RESOURCES) {
             const item = resources[id];
             const nextMax = totals.maxima[id];
@@ -442,19 +488,19 @@ function setupNexResources() {
     function render() {
         selector.value = String(character.nex);
         $("characterNex").textContent = `NEX ${character.nex}%`;
-        $("pePerTurn").textContent = String(totals.pePerTurn);
+        $("pePerTurn").textContent = data.resourceSystem === "determinacao" ? (Number.isInteger(data.determinationPerTurn) ? String(data.determinationPerTurn) : "—") : String(totals.pePerTurn + passiveEffects().perTurn);
         const presence = Number.isInteger(character.attributes?.presenca) ? character.attributes.presenca : 0;
         $("ritualDifficulty").textContent = String(10 + totals.pePerTurn + presence);
         $("nexExplanation").textContent = classId === "mundano"
             ? "Mundano: NEX 0%. Os recursos não progridem até escolher uma classe na criação."
-            : `NEX ${character.nex}% · nível ${totals.level}. Os máximos acompanham a classe, Vigor e Presença.${characterOrigin?.id === "cultista-arrependido" ? " A origem reduz pela metade apenas a Sanidade inicial." : ""}`;
-        for (const id of NEX_RULES.RESOURCES) {
+            : `NEX ${character.nex}% · nível ${totals.level}. ${data.resourceSystem === "determinacao" ? "Vida acompanha a classe e o Vigor; máximo e limite de PD são manuais." : "Os máximos acompanham a classe, Vigor e Presença."}${characterOrigin?.id === "cultista-arrependido" && data.resourceSystem !== "determinacao" ? " A origem reduz pela metade apenas a Sanidade inicial." : ""}`;
+        for (const id of resourceIds) {
             const item = resources[id];
             $(`${id}Value`).textContent = String(item.current);
             $(`${id}Maximum`).textContent = String(item.max);
             $(`${id}Current`).value = String(item.current);
             $(`${id}Current`).max = String(item.max);
-            $(`${id}Bonus`).value = String(item.bonus);
+            if (id !== "determinacao") $(`${id}Bonus`).value = String(item.bonus);
             $(`${id}Decrease`).disabled = item.current <= 0;
             $(`${id}Increase`).disabled = item.current >= item.max;
             const progress = $(`${id}Progress`);
@@ -462,12 +508,14 @@ function setupNexResources() {
             progress.value = item.current;
             progress.setAttribute("aria-valuetext", `${item.current} de ${item.max}`);
         }
+        $("determinacaoMaxInput").value = String(resources.determinacao.max);
+        $("determinacaoTurnInput").value = Number.isInteger(data.determinationPerTurn) ? String(data.determinationPerTurn) : "";
     }
 
     function save(message) {
         status.textContent = message;
         render();
-        scheduleSheetSave();
+        if (!persistSheet()) status.textContent = "Não foi possível salvar a mudança. Os valores desta sessão ainda não foram guardados; confira o aviso de armazenamento.";
     }
 
     recalculate();
@@ -480,11 +528,11 @@ function setupNexResources() {
         recalculate();
         save(`NEX atualizado para ${next}%. Os máximos foram recalculados sem apagar o dano já sofrido.`);
     });
-    for (const id of NEX_RULES.RESOURCES) {
-        const name = { vida: "Vida", esforco: "Esforço", sanidade: "Sanidade" }[id];
+    for (const id of resourceIds) {
+        const name = { vida: "Vida", esforco: "Esforço", sanidade: "Sanidade", determinacao: "Determinação" }[id];
         const item = resources[id];
         const input = $(`${id}Current`);
-        const bonus = $(`${id}Bonus`);
+        const bonus = id === "determinacao" ? null : $(`${id}Bonus`);
         const changeBy = (delta) => {
             const next = Math.max(0, Math.min(item.max, item.current + delta));
             if (next === item.current) return;
@@ -504,7 +552,7 @@ function setupNexResources() {
             item.current = next;
             save(`${name}: ${next} de ${item.max}.`);
         });
-        bonus.addEventListener("change", () => {
+        bonus?.addEventListener("change", () => {
             const next = Number(bonus.value);
             if (bonus.value.trim() === "" || !Number.isInteger(next) || next < -999 || next > 999) {
                 status.textContent = `O ajuste de ${name} deve ser um inteiro entre −999 e 999.`;
@@ -517,6 +565,28 @@ function setupNexResources() {
             save(`Máximo de ${name} ajustado para ${item.max}.`);
         });
     }
+    $("determinacaoMaxInput").addEventListener("change", () => {
+        const input = $("determinacaoMaxInput");
+        const next = Number(input.value);
+        if (!input.value.trim() || !Number.isInteger(next) || next < 0 || next > 99999) {
+            status.textContent = "Informe um máximo de Determinação entre 0 e 99999.";
+            render(); return;
+        }
+        const item = resources.determinacao;
+        item.current = Math.max(0, Math.min(next, item.current + next - item.max));
+        item.max = next;
+        save(`Máximo de Determinação ajustado para ${next}.`);
+    });
+    $("determinacaoTurnInput").addEventListener("change", () => {
+        const input = $("determinacaoTurnInput");
+        const next = Number(input.value);
+        if (!input.value.trim() || !Number.isInteger(next) || next < 0 || next > 99999) {
+            status.textContent = "Informe um limite de PD por turno entre 0 e 99999.";
+            render(); return;
+        }
+        data.determinationPerTurn = next;
+        save(`Limite de PD por turno: ${next}.`);
+    });
     return () => { recalculate(); render(); };
 }
 
@@ -531,8 +601,24 @@ function handsConflict() {
     const luta = skillSettings(SKILLS.find((skill) => skill.id === "luta"));
     return Boolean(equippedItem("equippedShieldId") && EQUIPMENT_RULES.twoHands(equippedWeapon(), effectiveTraining("luta", luta)));
 }
+function passiveEffects() {
+    const classId = classTheme(character);
+    const allowed = NEX_RULES.allowedNex(classId);
+    const level = classId === "mundano" || !allowed.length ? 0 : allowed.indexOf(NEX_RULES.normalizeNex(classId, character.nex)) + 1;
+    return SHEET_MECHANICS.effects({ entries: Array.isArray(sheetData().habilidades) ? sheetData().habilidades : [],
+        catalog: ABILITY_CATALOG.catalog, originAbility: characterOrigin?.ability, level,
+        enabled: sheetData().automaticEffects !== false });
+}
+function refreshPassiveEffects() {
+    refreshResourcesForAttributes();
+    refreshSkillsForAttributes();
+    refreshCombatForAttributes();
+    const effects = passiveEffects();
+    $("automaticEffectsSummary").textContent = sheetData().automaticEffects === false ? "Bônus automáticos desativados. Use os ajustes manuais."
+        : `Bônus calculados: ${effects.applied.join(" · ") || "nenhum poder permanente suportado nesta ficha"}. Condições e imunidades não são automatizadas.`;
+}
 function skillBonus(skill, settings) {
-    return effectiveTraining(skill.id, settings) + settings.other - (skill.loadPenalty && EQUIPMENT_RULES.isHeavy(equippedItem("equippedArmorId")) ? 5 : 0);
+    return effectiveTraining(skill.id, settings) + settings.other + (passiveEffects().skills[skill.id] || 0) - (skill.loadPenalty && EQUIPMENT_RULES.isHeavy(equippedItem("equippedArmorId")) ? 5 : 0);
 }
 function combatNumber(value) { return Number.isFinite(value) ? Math.max(-1000, Math.min(1000, value)) : 0; }
 function defenseSettings() {
@@ -545,18 +631,19 @@ function renderDefenses() {
     const agi = character.attributes?.agilidade;
     const conflict = handsConflict();
     const equipment = [armor, conflict ? null : shield].reduce((sum, item) => sum + (Number.isFinite(item?.defense) ? item.defense : 0), 0);
-    const defense = validAttribute(agi) ? 10 + agi + equipment + combatNumber(adjustment.defense) : null;
+    const powerDefense = passiveEffects().defense;
+    const defense = validAttribute(agi) ? 10 + agi + equipment + combatNumber(adjustment.defense) + powerDefense : null;
     const fortitude = skillSettings(SKILLS.find((skill) => skill.id === "fortitude"));
     const reflexos = skillSettings(SKILLS.find((skill) => skill.id === "reflexos"));
     const trainedBlock = effectiveTraining("fortitude", fortitude) > 0;
     const trainedDodge = effectiveTraining("reflexos", reflexos) > 0;
     $("defenseValue").textContent = defense === null ? "—" : String(defense);
-    $("blockValue").textContent = trainedBlock ? String(Math.max(0, fortitude.other + effectiveTraining("fortitude", fortitude) + combatNumber(adjustment.block))) : "Sem treino";
-    $("dodgeValue").textContent = trainedDodge && defense !== null ? String(defense + reflexos.other + effectiveTraining("reflexos", reflexos) + combatNumber(adjustment.dodge)) : "Sem treino / atributo";
+    $("blockValue").textContent = trainedBlock ? String(Math.max(0, skillBonus(SKILLS.find(skill => skill.id === "fortitude"), fortitude) + combatNumber(adjustment.block))) : "Sem treino";
+    $("dodgeValue").textContent = trainedDodge && defense !== null ? String(defense + skillBonus(SKILLS.find(skill => skill.id === "reflexos"), reflexos) + combatNumber(adjustment.dodge)) : "Sem treino / atributo";
     $("protectionValue").textContent = [armor?.name, shield?.name].filter(Boolean).join(" + ") || "Nenhuma";
     $("resistanceValue").textContent = [EQUIPMENT_RULES.isHeavy(armor) ? "Balístico, corte, impacto e perfuração 2" : "", typeof adjustment.resistance === "string" ? adjustment.resistance : ""].filter(Boolean).join(" · ") || "Nenhuma registrada";
     $("proficiencyValue").textContent = typeof adjustment.proficiency === "string" && adjustment.proficiency ? adjustment.proficiency : "Registrar nos ajustes";
-    $("defenseExplanation").textContent = `Defesa = 10 + AGI ${validAttribute(agi) ? agi : "—"} + equipamento ${equipment} + outros ${formatBonus(combatNumber(adjustment.defense))}. Bloqueio usa o bônus de Fortitude; Esquiva soma o bônus de Reflexos à Defesa. Ambos exigem treino.${EQUIPMENT_RULES.isHeavy(armor) ? " Proteção pesada: −5 nas perícias marcadas com +." : ""}${conflict ? " Escudo sem bônus: há uma arma de duas mãos equipada. Corrija o equipamento ou a empunhadura." : ""}`;
+    $("defenseExplanation").textContent = `Defesa = 10 + AGI ${validAttribute(agi) ? agi : "—"} + equipamento ${equipment} + poderes ${powerDefense} + outros ${formatBonus(combatNumber(adjustment.defense))}. Bloqueio usa o bônus de Fortitude; Esquiva soma o bônus de Reflexos à Defesa. Ambos exigem treino.${EQUIPMENT_RULES.isHeavy(armor) ? " Proteção pesada: −5 nas perícias marcadas com +." : ""}${conflict ? " Escudo sem bônus: há uma arma de duas mãos equipada. Corrija o equipamento ou a empunhadura." : ""}`;
 }
 function setupDefenseAdjustments() {
     for (const [id, key, numeric] of [["defenseBonus", "defense", true], ["blockBonus", "block", true], ["dodgeBonus", "dodge", true], ["resistanceNotes", "resistance", false], ["proficiencyNotes", "proficiency", false]]) {
@@ -590,13 +677,19 @@ function attackProfile(weapon) {
     const attribute = settings.attribute === "skill" ? training.attribute : settings.attribute;
     return { settings, skill, attribute, bonus: skillBonus(skill, training) + settings.attackBonus };
 }
+function effectiveCritical(value) {
+    const critical = EQUIPMENT_RULES.parseCritical(value);
+    if (!critical) return null;
+    const effects = passiveEffects();
+    return { threshold: Math.max(1, critical.threshold - effects.criticalMargin), multiplier: critical.multiplier + effects.criticalMultiplier };
+}
 function rollWeaponAttack(weapon) {
     if (handsConflict()) return showRollError("Há um escudo e uma arma de duas mãos equipados. Corrija o equipamento ou a empunhadura antes de atacar.");
     const profile = attackProfile(weapon);
     const roll = EQUIPMENT_RULES.rollTest(character.attributes?.[profile.attribute]);
     if (!roll) return showRollError("Preencha o atributo usado no ataque na roda da ficha.");
     showDiceResult({ name: `Ataque · ${weapon.name}` }, roll.dice, roll.chosenIndex, profile.bonus, roll.useLowest);
-    const critical = EQUIPMENT_RULES.parseCritical(profile.settings.critical);
+    const critical = effectiveCritical(profile.settings.critical);
     const natural = roll.dice[roll.chosenIndex];
     const note = document.createElement("p");
     note.className = "roll-result__error";
@@ -606,15 +699,23 @@ function rollWeaponAttack(weapon) {
 }
 function rollWeaponDamage(weapon, isCritical) {
     const settings = weaponSettings(weapon);
-    const base = EQUIPMENT_RULES.parseDamage(settings.damage);
+    let base = EQUIPMENT_RULES.parseDamage(settings.damage);
     const extra = settings.extraDamage ? EQUIPMENT_RULES.parseDamage(settings.extraDamage) : null;
-    const critical = EQUIPMENT_RULES.parseCritical(settings.critical);
+    const critical = effectiveCritical(settings.critical);
     if (!base || (settings.extraDamage && !extra)) return showRollError("Configure o dano com uma expressão como 1d6 ou 2d8+2. Dano extra usa o mesmo formato.");
     if (isCritical && !critical) return showRollError("Configure o crítico como 20, 19, x3 ou 19/x3.");
     const attribute = settings.damageAttribute === "none" ? 0 : character.attributes?.[settings.damageAttribute];
     if (!validAttribute(attribute)) return showRollError("Preencha o atributo somado ao dano na roda da ficha.");
+    const effects = passiveEffects();
+    const melee = weapon.weaponStyle === "Corpo a Corpo";
+    if (melee && effects.meleeDie) base = { ...base, count: base.count + effects.meleeDie };
+    let powerDamage = melee && settings.skill === "luta" ? effects.meleeDamage : weapon.weaponStyle === "Arma de Fogo" ? effects.firearmDamage : 0;
+    if (weapon.weaponStyle === "Arma de Disparo" && effects.rangedAgility) {
+        if (!validAttribute(character.attributes?.agilidade)) return showRollError("Preencha Agilidade para aplicar Tiro Certeiro.");
+        powerDamage += character.attributes.agilidade;
+    }
     const multiplier = isCritical ? critical.multiplier : 1;
-    const roll = EQUIPMENT_RULES.rollDamage(base, extra, multiplier, settings.damageBonus + attribute);
+    const roll = EQUIPMENT_RULES.rollDamage(base, extra, multiplier, settings.damageBonus + attribute + powerDamage);
     const result = $("skillRollResult");
     result.replaceChildren();
     result.textContent = "";
@@ -668,6 +769,15 @@ function renderEquippedWeapon(keepSettingsOpen = false) {
         const value = character.attributes?.[current.attribute];
         const count = validAttribute(value) ? `${value > 0 ? value : value === 0 ? 2 : 1 - value}d20${value <= 0 ? " (menor)" : " (maior)"}` : "Atributo não preenchido";
         summary.textContent = `${current.skill.name} · ${count} · bônus ${formatBonus(current.bonus)} · dano ${current.settings.damage || "não configurado"} · crítico ${current.settings.critical}${handsConflict() ? " · Conflito: escudo e arma de duas mãos" : ""}`;
+        const effects = passiveEffects();
+        const automatic = [];
+        if (weapon.weaponStyle === "Corpo a Corpo" && effects.meleeDie) automatic.push("+1 dado base (também multiplica no crítico)");
+        if (weapon.weaponStyle === "Corpo a Corpo" && current.settings.skill === "luta" && effects.meleeDamage) automatic.push(`+${effects.meleeDamage} dano fixo`);
+        if (weapon.weaponStyle === "Arma de Fogo" && effects.firearmDamage) automatic.push(`+${effects.firearmDamage} dano fixo`);
+        if (weapon.weaponStyle === "Arma de Disparo" && effects.rangedAgility) automatic.push("+AGI no dano");
+        const critical = effectiveCritical(current.settings.critical);
+        if (critical && (effects.criticalMargin || effects.criticalMultiplier)) automatic.push(`crítico efetivo ${critical.threshold}/x${critical.multiplier}`);
+        if (automatic.length) summary.textContent += ` · Automático: ${automatic.join(" · ")}`;
     }
     updateSummary();
     const actions = document.createElement("div");
@@ -803,8 +913,18 @@ function renderEntries(kind, expandedId = null) {
             openPanel = wasOpen ? null : panel;
         });
         const category = document.createElement("span");
-        category.textContent = fromOrigin ? `Habilidade de origem · ${characterOrigin.name}` : kind === "inventario" ? `${INVENTORY_CATEGORIES[entry.category] || "Geral"}${entry.group ? ` · ${entry.group}` : ""}` : kind === "habilidades" ? "Habilidade adicionada" : "Ritual";
+        category.textContent = fromOrigin ? `Habilidade de origem · ${characterOrigin.name}` : kind === "inventario" ? `${INVENTORY_CATEGORIES[entry.category] || "Geral"}${entry.group ? ` · ${entry.group}` : ""}` : kind === "habilidades" ? entry.abilityCatalogId && ABILITY_CATALOG ? ABILITY_CATALOG.classification({ ...entry, kind: entry.abilityKind }) : "Habilidade criada" : entry.ritualCatalogId && RITUAL_CATALOG ? RITUAL_CATALOG.classification(entry) : "Ritual";
         panel.append(category);
+        if (kind === "rituais" && entry.ritualCatalogId) {
+            const parameters = document.createElement("p"); parameters.className = "entry-item__catalog-stats";
+            parameters.textContent = `Normal · Execução: ${entry.execution} · Alcance: ${entry.range} · Alvo/área/efeito: ${entry.target} · Duração: ${entry.duration} · Resistência: ${entry.resistance}`;
+            panel.append(parameters);
+        }
+        if (kind === "habilidades" && entry.requirements) {
+            const requirements = document.createElement("p");
+            requirements.textContent = `Pré-requisitos: ${entry.requirements}`;
+            panel.append(requirements);
+        }
         const catalogStats = kind !== "inventario" ? "" : entry.category === "armas" ? weaponStatsText(entry)
             : entry.category === "municoes" ? ammunitionStatsText(entry)
                 : entry.category === "protecao" ? protectionStatsText(entry)
@@ -820,6 +940,7 @@ function renderEntries(kind, expandedId = null) {
             description.textContent = entry.description;
             panel.append(description);
         }
+        if (kind === "rituais" && entry.ritualCatalogId) appendRitualRolls(panel, entry);
         let equipCheckbox = null;
         if (kind === "inventario" && EQUIPMENT_RULES.slot(entry)) {
             const slot = EQUIPMENT_RULES.slot(entry);
@@ -876,6 +997,7 @@ function renderEntries(kind, expandedId = null) {
                 if (persistSheet()) {
                     renderEntries(kind);
                     if (kind === "inventario") { renderEquippedWeapon(); setupSkills(); renderDefenses(); }
+                    if (kind === "habilidades") { refreshPassiveEffects(); persistSheet(); }
                 } else {
                     data[kind] = previousItems;
                     if (slot) data[slot] = previousEquipped;
@@ -1104,8 +1226,9 @@ function setupSheetEntries() {
     document.querySelectorAll("[data-add-entry]").forEach((button) => {
         button.addEventListener("click", () => {
             entryKind = button.dataset.addEntry;
-            $("entryDialogTitle").textContent = entryKind === "inventario" ? "Criar item" : `Adicionar ${ENTRY_TYPES[entryKind].singular}`;
-            $("entrySubmit").textContent = entryKind === "inventario" ? "Criar item" : `Adicionar ${ENTRY_TYPES[entryKind].singular}`;
+            const action = "Criar";
+            $("entryDialogTitle").textContent = `${action} ${ENTRY_TYPES[entryKind].singular}`;
+            $("entrySubmit").textContent = `${action} ${ENTRY_TYPES[entryKind].singular}`;
             $("entryCategoryField").hidden = entryKind !== "inventario";
             $("entryForm").reset();
             if (entryKind === "inventario") $("entryCategory").value = inventoryFilter === "todos" ? "itens" : inventoryFilter;
@@ -1140,6 +1263,209 @@ function setupSheetEntries() {
         });
     });
     updateInventoryFilters();
+}
+
+function setupAbilityCatalog() {
+    const dialog = $("abilityCatalogDialog");
+    const search = $("abilityCatalogSearch");
+    const message = $("abilityCatalogMessage");
+    let activeCategory = "combatente";
+    let activeSubgroup = "";
+    const catalog = ABILITY_CATALOG?.catalog || [];
+    const categories = ABILITY_CATALOG?.categories || {};
+    const known = () => Array.isArray(sheetData().habilidades) ? sheetData().habilidades : [];
+    const alreadyKnown = (item) => ABILITY_CATALOG.duplicate(item, known(), characterOrigin?.ability);
+    function render() {
+        const categoryNav = $("abilityCatalogCategories");
+        const subgroupNav = $("abilityCatalogSubgroups");
+        const list = $("abilityCatalogList");
+        categoryNav.replaceChildren(); subgroupNav.replaceChildren(); list.replaceChildren();
+        for (const [key, label] of Object.entries(categories)) {
+            const button = document.createElement("button");
+            button.type = "button"; button.textContent = label;
+            button.setAttribute("aria-pressed", String(key === activeCategory));
+            button.addEventListener("click", () => { activeCategory = key; activeSubgroup = ""; search.value = ""; message.textContent = ""; render(); });
+            categoryNav.append(button);
+        }
+        const subgroups = [...new Set(catalog.filter(item => item.category === activeCategory).map(item => item.subgroup))];
+        if (!subgroups.includes(activeSubgroup)) activeSubgroup = subgroups[0] || "";
+        for (const subgroup of subgroups) {
+            const button = document.createElement("button");
+            button.type = "button"; button.textContent = subgroup;
+            button.setAttribute("aria-pressed", String(subgroup === activeSubgroup));
+            button.addEventListener("click", () => { activeSubgroup = subgroup; search.value = ""; message.textContent = ""; render(); });
+            subgroupNav.append(button);
+        }
+        const query = ABILITY_CATALOG?.normalize(search.value.trim()) || "";
+        const visible = catalog.filter(item => query
+            ? ABILITY_CATALOG.normalize([item.name, item.subgroup, categories[item.category], item.origin, item.requirements].join(" ")).includes(query)
+            : item.category === activeCategory && item.subgroup === activeSubgroup);
+        $("abilityCatalogGroupTitle").textContent = query ? `Busca no livro · ${visible.length} resultado(s)` : `${categories[activeCategory] || "Habilidades"} · ${activeSubgroup} · ${visible.length}`;
+        if (!visible.length) {
+            const empty = document.createElement("p"); empty.className = "catalog-list__empty";
+            empty.textContent = query ? "Nenhuma habilidade encontrada. Tente outro nome ou crie uma habilidade própria." : "Nenhuma habilidade nesta categoria.";
+            list.append(empty); return;
+        }
+        let openPanel = null; let openToggle = null;
+        visible.forEach(item => {
+            const row = document.createElement("article"); row.className = "catalog-item";
+            const toggle = document.createElement("button"); toggle.type = "button"; toggle.className = "catalog-item__toggle";
+            toggle.id = `ability-toggle-${item.id}`;
+            toggle.setAttribute("aria-expanded", "false"); toggle.setAttribute("aria-controls", `ability-details-${item.id}`);
+            const name = document.createElement("strong"); name.textContent = item.name;
+            const classification = document.createElement("small"); classification.textContent = ABILITY_CATALOG.classification(item);
+            toggle.append(name, classification);
+            const panel = document.createElement("div"); panel.id = `ability-details-${item.id}`;
+            panel.className = "catalog-item__details"; panel.hidden = true;
+            panel.setAttribute("role", "region"); panel.setAttribute("aria-labelledby", toggle.id);
+            toggle.addEventListener("click", () => {
+                const wasOpen = toggle.getAttribute("aria-expanded") === "true";
+                if (openPanel && openPanel !== panel) { openPanel.hidden = true; openToggle.setAttribute("aria-expanded", "false"); }
+                panel.hidden = wasOpen; toggle.setAttribute("aria-expanded", String(!wasOpen));
+                openPanel = wasOpen ? null : panel; openToggle = wasOpen ? null : toggle;
+            });
+            const description = document.createElement("p"); description.className = "catalog-item__description";
+            description.textContent = item.description; panel.append(description);
+            if (item.minNex || item.requirements || item.origin) {
+                const requirements = document.createElement("p"); requirements.className = "catalog-item__classification";
+                requirements.textContent = `Pré-requisitos: ${[item.minNex ? `NEX ${item.minNex}%` : "", item.requirements, item.origin ? `Origem: ${item.origin}` : ""].filter(Boolean).join(" · ")}`;
+                panel.append(requirements);
+            }
+            let affinity = null;
+            if (item.affinity) {
+                const text = document.createElement("p"); text.textContent = `Afinidade: ${item.affinity}`; panel.append(text);
+                const label = document.createElement("label"); label.className = "ability-catalog__affinity";
+                affinity = document.createElement("input"); affinity.type = "checkbox";
+                affinity.setAttribute("aria-label", `Registrar afinidade de ${item.name}`);
+                const caption = document.createElement("span"); caption.textContent = "Registrar versão com afinidade (requer afinidade com o elemento e nova escolha do poder)";
+                label.append(affinity, caption); panel.append(label);
+            }
+            const label = document.createElement("label"); label.className = "ability-catalog__notes";
+            label.textContent = "Escolhas/anotações (opcional)";
+            const notes = document.createElement("input"); notes.type = "text"; notes.maxLength = 300;
+            notes.placeholder = "Perícias escolhidas, arma favorita, elemento, ritual…";
+            notes.setAttribute("aria-label", `Escolhas de ${item.name}`); label.append(notes); panel.append(label);
+            const advisory = document.createElement("small"); advisory.className = "ability-catalog__advisory";
+            advisory.textContent = "Confira classe, trilha, NEX, requisitos e escolhas com o mestre. Registrar não gasta recursos. Apenas bônus permanentes suportados são calculados, se a opção estiver ligada.";
+            panel.append(advisory);
+            const add = document.createElement("button"); add.type = "button"; add.className = "button button--primary";
+            add.textContent = alreadyKnown(item) ? "Já está na ficha" : "Adicionar à ficha";
+            add.disabled = alreadyKnown(item); add.setAttribute("aria-label", `Adicionar ${item.name} à ficha`);
+            add.addEventListener("click", () => {
+                if (alreadyKnown(item)) { message.textContent = "Esta habilidade já está na ficha."; return; }
+                const data = sheetData(); const previous = data.habilidades;
+                const entry = ABILITY_CATALOG.entry(item, crypto.randomUUID(), affinity?.checked, notes.value.trim());
+                data.habilidades = [...known(), entry];
+                if (!persistSheet()) { data.habilidades = previous; message.textContent = "Não foi possível salvar. A habilidade não foi adicionada; tente liberar espaço no navegador."; return; }
+                refreshPassiveEffects(); persistSheet();
+                renderEntries("habilidades", entry.id); dialog.close(); $("openAbilityCatalog").focus();
+            });
+            panel.append(add); row.append(toggle, panel); list.append(row);
+        });
+    }
+    $("openAbilityCatalog").addEventListener("click", () => {
+        const classKey = classTheme(character);
+        activeCategory = categories[classKey] ? classKey : "combatente";
+        activeSubgroup = ""; search.value = ""; message.textContent = "";
+        render(); dialog.showModal();
+    });
+    $("closeAbilityCatalog").addEventListener("click", () => { dialog.close(); $("openAbilityCatalog").focus(); });
+    search.addEventListener("input", () => { message.textContent = ""; render(); });
+}
+
+function setupRitualCatalog() {
+    const dialog = $("ritualCatalogDialog");
+    const search = $("ritualCatalogSearch");
+    const message = $("ritualCatalogMessage");
+    const catalog = RITUAL_CATALOG?.catalog || [];
+    let activeElement = "Todos"; let activeCircle = 0;
+    const known = () => Array.isArray(sheetData().rituais) ? sheetData().rituais : [];
+    function render() {
+        const elementNav = $("ritualCatalogElements"); const circleNav = $("ritualCatalogCircles");
+        const list = $("ritualCatalogList"); elementNav.replaceChildren(); circleNav.replaceChildren(); list.replaceChildren();
+        ["Todos", ...(RITUAL_CATALOG?.elements || [])].forEach(element => {
+            const button = document.createElement("button"); button.type = "button"; button.textContent = element;
+            button.setAttribute("aria-pressed", String(element === activeElement));
+            button.addEventListener("click", () => { activeElement = element; message.textContent = ""; render(); }); elementNav.append(button);
+        });
+        [0, 1, 2, 3, 4].forEach(circle => {
+            const button = document.createElement("button"); button.type = "button"; button.textContent = circle ? `${circle}º círculo` : "Todos";
+            button.setAttribute("aria-pressed", String(circle === activeCircle));
+            button.addEventListener("click", () => { activeCircle = circle; message.textContent = ""; render(); }); circleNav.append(button);
+        });
+        const query = RITUAL_CATALOG?.normalize(search.value.trim()) || "";
+        const visible = catalog.filter(item => (activeElement === "Todos" || item.element === activeElement) && (!activeCircle || item.circle === activeCircle)
+            && (!query || RITUAL_CATALOG.normalize(`${item.name} ${item.element} ${item.circle}º círculo`).includes(query)));
+        $("ritualCatalogGroupTitle").textContent = `${activeElement === "Todos" ? "Todos os elementos" : activeElement} · ${activeCircle ? `${activeCircle}º círculo` : "Todos os círculos"} · ${visible.length} ritual(is)`;
+        if (!visible.length) {
+            const empty = document.createElement("p"); empty.className = "catalog-list__empty";
+            empty.textContent = "Nenhum ritual com esta busca e filtros. Tente Todos ou crie um ritual próprio."; list.append(empty); return;
+        }
+        let openPanel = null; let openToggle = null;
+        visible.forEach(item => {
+            const row = document.createElement("article"); row.className = "catalog-item"; row.dataset.element = item.element;
+            const toggle = document.createElement("button"); toggle.type = "button"; toggle.className = "catalog-item__toggle";
+            toggle.id = `ritual-toggle-${item.id}`; toggle.setAttribute("aria-expanded", "false"); toggle.setAttribute("aria-controls", `ritual-details-${item.id}`);
+            const name = document.createElement("strong"); name.textContent = item.name;
+            const classification = document.createElement("small"); classification.textContent = RITUAL_CATALOG.classification(item); toggle.append(name, classification);
+            const panel = document.createElement("div"); panel.id = `ritual-details-${item.id}`; panel.className = "catalog-item__details"; panel.hidden = true;
+            panel.setAttribute("role", "region"); panel.setAttribute("aria-labelledby", toggle.id);
+            toggle.addEventListener("click", () => {
+                const wasOpen = toggle.getAttribute("aria-expanded") === "true";
+                if (openPanel && openPanel !== panel) { openPanel.hidden = true; openToggle.setAttribute("aria-expanded", "false"); }
+                panel.hidden = wasOpen; toggle.setAttribute("aria-expanded", String(!wasOpen)); openPanel = wasOpen ? null : panel; openToggle = wasOpen ? null : toggle;
+            });
+            const facts = document.createElement("p"); facts.className = "ritual-catalog__parameters";
+            facts.textContent = `Parâmetros da versão normal\nExecução: ${item.execution} · Alcance: ${item.range}\nAlvo/área/efeito: ${item.target}\nDuração: ${item.duration} · Resistência: ${item.resistance}`; panel.append(facts);
+            const versions = document.createElement("div"); versions.className = "catalog-categories ritual-catalog__versions";
+            versions.setAttribute("role", "group"); versions.setAttribute("aria-label", `Formas de ${item.name}`);
+            const versionText = document.createElement("p"); versionText.className = "catalog-item__description";
+            const requirementText = document.createElement("p"); requirementText.className = "catalog-item__classification";
+            let selectedElement = item.element === "Varia" ? RITUAL_CATALOG.choices[0] : item.element;
+            let activeVersion = "normal";
+            function showVersion() {
+                const version = item.versions[activeVersion];
+                versions.children && Array.from(versions.children).forEach(button => button.setAttribute("aria-pressed", String(button.dataset.version === activeVersion)));
+                versionText.textContent = `${activeVersion === "normal" ? "Normal" : activeVersion === "discente" ? "Discente" : "Verdadeiro"} · ${item.cost + version.extraCost} PE${version.extraCost ? ` (${item.cost} + ${version.extraCost})` : ""}\n${activeVersion === "normal" ? version.description : `Efeito básico: ${item.description}\n\nAlterações desta forma: ${version.description}`}`;
+                requirementText.textContent = `Requisitos: ${RITUAL_CATALOG.versionRequirements({ ...item, element: selectedElement }, version)}`;
+            }
+            Object.keys(item.versions).forEach(key => {
+                const button = document.createElement("button"); button.type = "button"; button.dataset.version = key;
+                button.textContent = key === "normal" ? "Normal" : key === "discente" ? "Discente" : "Verdadeiro";
+                button.addEventListener("click", () => { activeVersion = key; showVersion(); }); versions.append(button);
+            });
+            showVersion(); panel.append(versions, versionText, requirementText);
+            let elementSelect = null;
+            if (item.element === "Varia") {
+                const label = document.createElement("label"); label.className = "ability-catalog__notes"; label.textContent = "Elemento escolhido ao aprender";
+                elementSelect = document.createElement("select"); elementSelect.setAttribute("aria-label", `Elemento de ${item.name}`);
+                RITUAL_CATALOG.choices.forEach(element => { const option = document.createElement("option"); option.value = element; option.textContent = element; elementSelect.append(option); });
+                elementSelect.value = selectedElement;
+                elementSelect.addEventListener("change", () => { selectedElement = elementSelect.value; showVersion(); updateAdd(); });
+                label.append(elementSelect); panel.append(label);
+            }
+            const label = document.createElement("label"); label.className = "ability-catalog__notes"; label.textContent = "Anotações (opcional)";
+            const notes = document.createElement("input"); notes.type = "text"; notes.maxLength = 300; notes.setAttribute("aria-label", `Anotações de ${item.name}`);
+            label.append(notes); panel.append(label);
+            const advisory = document.createElement("small"); advisory.className = "ability-catalog__advisory";
+            advisory.textContent = "Adicionar guarda o ritual e seus aprimoramentos, sem conjurar. Consulte acesso ao círculo, afinidade e requisitos especiais; a versão exibida não é liberada automaticamente."; panel.append(advisory);
+            const add = document.createElement("button"); add.type = "button"; add.className = "button button--primary"; add.setAttribute("aria-label", `Adicionar ${item.name} à ficha`);
+            function updateAdd() { add.disabled = RITUAL_CATALOG.duplicate(item, known(), selectedElement); add.textContent = add.disabled ? "Já está na ficha" : "Adicionar à ficha"; }
+            updateAdd();
+            add.addEventListener("click", () => {
+                if (RITUAL_CATALOG.duplicate(item, known(), selectedElement)) { message.textContent = "Este ritual já está na ficha."; return; }
+                const data = sheetData(); const previous = data.rituais;
+                const entry = RITUAL_CATALOG.entry(item, crypto.randomUUID(), selectedElement, notes.value.trim());
+                data.rituais = [...known(), entry];
+                if (!persistSheet()) { data.rituais = previous; message.textContent = "Não foi possível salvar. O ritual não foi adicionado; tente liberar espaço no navegador."; return; }
+                renderEntries("rituais", entry.id); dialog.close(); $("openRitualCatalog").focus();
+            });
+            panel.append(add); row.append(toggle, panel); list.append(row);
+        });
+    }
+    $("openRitualCatalog").addEventListener("click", () => { activeElement = "Todos"; activeCircle = 0; search.value = ""; message.textContent = ""; render(); dialog.showModal(); });
+    $("closeRitualCatalog").addEventListener("click", () => { dialog.close(); $("openRitualCatalog").focus(); });
+    search.addEventListener("input", () => { message.textContent = ""; render(); });
 }
 
 function updateInventoryFilters() {
@@ -1320,16 +1646,54 @@ function showDiceResult(skill, dice, chosenIndex, bonus, useLowest) {
     result.append(header, body);
 }
 
+function showSumResult(name, roll, note = "") {
+    const result = $("skillRollResult");
+    result.replaceChildren(); result.textContent = ""; result.hidden = false;
+    const header = document.createElement("div"); header.className = "roll-result__header";
+    const title = document.createElement("strong"); title.textContent = name;
+    header.append(title, rollCloseButton(result));
+    const total = document.createElement("output"); total.className = "combat-damage-total";
+    total.textContent = String(roll.total);
+    const detail = document.createElement("p"); detail.className = "roll-result__error";
+    detail.textContent = `${roll.expression}: ${roll.details}${roll.bonus ? ` · bônus automático ${formatBonus(roll.bonus)}` : ""}. Total: ${roll.total}. ${note}`;
+    result.append(header, total, detail);
+    result.setAttribute("aria-label", `${name}. ${detail.textContent}`);
+}
+
+function appendRitualRolls(panel, entry) {
+    const source = RITUAL_CATALOG.catalog.find(item => item.id === entry.ritualCatalogId);
+    const profile = source && SHEET_MECHANICS.ritualDice[source.name];
+    const controls = document.createElement("div"); controls.className = "ritual-rolls";
+    if (profile) {
+        for (const [form, label] of [["normal", "Normal"], ["discente", "Discente"], ["verdadeiro", "Verdadeiro"]]) {
+            if (!profile[form] || !source.versions[form]) continue;
+            const button = document.createElement("button"); button.type = "button"; button.className = "button button--ghost";
+            button.textContent = `${label} · ${profile[form]}`;
+            button.setAttribute("aria-label", `Rolar ${source.name} ${label}, ${profile[form]}`);
+            button.addEventListener("click", () => {
+                const potent = passiveEffects().ritualIntellect;
+                const bonus = potent ? character.attributes?.intelecto : 0;
+                if (!validAttribute(bonus)) return showRollError("Preencha Intelecto para aplicar Ritual Potente.");
+                const roll = SHEET_MECHANICS.rollExpression(profile[form], bonus);
+                showSumResult(`${profile.kind} · ${source.name} · ${label}`, roll,
+                    "Confira requisitos e resistência. Recursos e PV não foram alterados.");
+            });
+            controls.append(button);
+        }
+    }
+    const note = document.createElement("p"); note.className = "pending-note";
+    note.textContent = profile ? "Somente os dados indicados são rolados. Dano da arma, efeitos recorrentes, resistências e aplicação ao alvo são separados."
+        : "Este ritual não tem uma rolagem automática conferida. Use a rolagem livre para os dados indicados na descrição, se houver.";
+    panel.append(controls, note);
+}
+
 function rollSkill(skill, settings) {
     const attributeValue = character.attributes?.[settings.attribute];
     if (!validAttribute(attributeValue)) {
         showRollError(`O atributo de ${skill.name} ainda não tem um valor válido. Edite a roda de atributos da ficha.`);
         return;
     }
-    const diceCount = attributeValue > 0 ? attributeValue : attributeValue === 0 ? 2 : 1 - attributeValue;
-    const dice = Array.from({ length: diceCount }, () => Math.floor(Math.random() * 20) + 1);
-    const useLowest = attributeValue <= 0;
-    const chosenIndex = dice.indexOf(useLowest ? Math.min(...dice) : Math.max(...dice));
+    const { dice, useLowest, chosenIndex } = EQUIPMENT_RULES.rollTest(attributeValue);
     const bonus = skillBonus(skill, settings);
     showDiceResult(skill, dice, chosenIndex, bonus, useLowest);
 }
@@ -1572,6 +1936,8 @@ if (character) {
     refreshResourcesForAttributes = setupNexResources();
     setupTabs("[data-description-tab]", "descriptionTab", "textos");
     setupSheetEntries();
+    setupAbilityCatalog();
+    setupRitualCatalog();
     setupNoteBoard();
     setupOriginTraining();
     setupSkills();
@@ -1580,4 +1946,18 @@ if (character) {
     setupDefenseAdjustments();
     refreshCombatForAttributes();
     setupAttributeEditing();
+    $("freeRollForm").addEventListener("submit", event => {
+        event.preventDefault();
+        const roll = SHEET_MECHANICS.rollExpression($("freeRollExpression").value);
+        if (!roll) return showRollError("Use uma expressão como 2d6+3 ou 2d8+1d6+2. Até 500 dados de 2 a 1000 faces.");
+        showSumResult("Rolagem livre", roll, "Todos os dados são somados. Para testes, use o atributo ou a perícia.");
+    });
+    $("automaticEffects").checked = sheetData().automaticEffects !== false;
+    $("automaticEffects").addEventListener("change", () => {
+        const previous = sheetData().automaticEffects;
+        sheetData().automaticEffects = $("automaticEffects").checked;
+        if (!persistSheet()) { sheetData().automaticEffects = previous; $("automaticEffects").checked = previous !== false; return; }
+        refreshPassiveEffects(); persistSheet();
+    });
+    refreshPassiveEffects();
 }

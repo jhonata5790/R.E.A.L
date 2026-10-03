@@ -1,0 +1,52 @@
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
+const api = require("../ritual-catalog.js");
+assert.equal(api.catalog.length, 83);
+assert.equal(new Set(api.catalog.map(item => item.id)).size, 83);
+assert.ok(Object.isFrozen(api.catalog));
+for (const [element, count] of Object.entries({ Conhecimento: 18, Energia: 18, Morte: 19, Sangue: 18, Medo: 9, Varia: 1 })) assert.equal(api.catalog.filter(item => item.element === element).length, count);
+for (const [circle, count] of Object.entries({ 1: 26, 2: 22, 3: 18, 4: 17 })) assert.equal(api.catalog.filter(item => item.circle === Number(circle)).length, count);
+for (const item of api.catalog) {
+    assert.ok(Object.isFrozen(item) && Object.isFrozen(item.versions));
+    assert.ok(item.name && item.execution && item.range && item.target && item.duration && item.resistance && item.description);
+    assert.equal(item.source, "https://crisordemparanormal.com/");
+    assert.equal(item.cost, api.costs[item.circle]);
+    assert.equal(item.versions.normal.extraCost, 0);
+    for (const version of Object.values(item.versions)) {
+        assert.ok(Object.isFrozen(version)); assert.ok(version.description);
+        assert.ok(Number.isInteger(version.extraCost) && version.extraCost >= 0);
+        assert.ok(version.minCircle === null || (version.minCircle >= item.circle && version.minCircle <= 4));
+    }
+}
+const find = name => api.catalog.find(item => item.name === name);
+const healing = find("Cicatrização");
+assert.equal(healing.versions.verdadeiro.extraCost, 9);
+assert.equal(healing.versions.verdadeiro.minCircle, 4);
+assert.equal(healing.versions.verdadeiro.affinity, true);
+assert.equal(find("Armadura de Sangue").versions.discente.extraCost, 5);
+assert.equal(find("Zerar Entropia").versions.verdadeiro.extraCost, 11);
+assert.equal(find("Espirais da Perdição").versions.verdadeiro.extraCost, 8);
+assert.ok(!find("Possessão").versions.discente && !find("Possessão").versions.verdadeiro);
+assert.ok(!find("Alterar Memória").versions.discente, "não inventa versões inexistentes");
+const saved = api.entry(healing, "healing", "", "Nota pessoal");
+assert.equal(saved.name, "Cicatrização"); assert.match(saved.description, /Discente.*Verdadeiro.*Nota pessoal/s);
+saved.versions.verdadeiro.extraCost = 0;
+assert.equal(healing.versions.verdadeiro.extraCost, 9, "salvar faz cópia e não modifica catálogo");
+assert.equal(api.duplicate(healing, [saved]), true);
+assert.equal(api.duplicate(healing, [null, { name: "CICATRIZACAO" }]), true);
+const weapon = find("Amaldiçoar Arma");
+assert.throws(() => api.entry(weapon, "bad", "Medo"));
+const blood = api.entry(weapon, "blood", "Sangue");
+assert.equal(blood.element, "Sangue"); assert.equal(blood.name, "Amaldiçoar Arma (Sangue)");
+assert.equal(api.duplicate(weapon, [blood], "Sangue"), true);
+assert.equal(api.duplicate(weapon, [blood], "Energia"), false);
+assert.equal(api.duplicate(weapon, [{ name: "Amaldiçoar Arma" }], "Sangue"), true, "entrada antiga sem elemento não duplica silenciosamente");
+assert.match(api.versionRequirements(weapon, weapon.versions.verdadeiro), /elemento escolhido/);
+assert.match(find("Lâmina do Medo").requirements, /Lâmina Paranormal.*99%/);
+const html = fs.readFileSync(path.join(__dirname, "..", "personagem.html"), "utf8");
+assert.match(html, /id="openRitualCatalog"/);
+assert.match(html, /data-add-entry="rituais">Criar ritual/);
+assert.ok(html.indexOf('src="ritual-catalog.js') < html.indexOf('src="personagem.js'));
+assert.match(html, /Registrar um ritual não o conjura/);
+console.log("83 rituais: elementos, círculos, custos, aprimoramentos e duplicatas: OK");

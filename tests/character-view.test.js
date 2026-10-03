@@ -47,7 +47,9 @@ function openCharacter(character, options = {}) {
     const ids = Object.fromEntries([
         "missingCharacter", "characterContent", "sheetTabs", "characterName", "infoCharacterName", "characterTheme", "characterNex",
         "nexSelect", "pePerTurn", "nexExplanation", "ritualDifficulty", "resourceMessage",
-        ...["vida", "esforco", "sanidade"].flatMap((id) => [`${id}Value`, `${id}Maximum`, `${id}Current`, `${id}Progress`, `${id}Bonus`, `${id}Decrease`, `${id}Increase`]),
+        ...["vida", "esforco", "sanidade", "determinacao"].flatMap((id) => [`${id}Value`, `${id}Maximum`, `${id}Current`, `${id}Progress`, `${id}Bonus`, `${id}Decrease`, `${id}Increase`]),
+        "chooseResourceSystem", "resourceSystemName", "effortLimitLabel", "esforcoResource", "sanidadeResource", "determinacaoResource", "determinacaoMaxInput", "determinacaoTurnInput", "resourceSystemDialog", "useEffortSanity", "useDetermination", "cancelResourceSystem",
+        "automaticEffects", "automaticEffectsSummary", "freeRollForm", "freeRollExpression",
         "characterOrigin", "characterClass", "characterPlayer", "characterCampaign",
         "editCharacter", "characterAppearance", "characterPersonality",
         "characterHistory", "characterObjective", "attributeWheelImage",
@@ -57,6 +59,8 @@ function openCharacter(character, options = {}) {
         "toggleNotesFullscreen", "entryDialog", "entryDialogTitle", "entryCategoryField",
         "entryCategory", "entryForm", "entryName", "entryDescription", "cancelEntry", "entrySubmit",
         "openCatalog", "catalogDialog", "catalogDialogTitle", "catalogCollections", "catalogCategories", "catalogGroupTitle", "catalogList", "closeCatalog",
+        "openAbilityCatalog", "abilityCatalogDialog", "closeAbilityCatalog", "abilityCatalogCategories", "abilityCatalogSubgroups", "abilityCatalogSearch", "abilityCatalogGroupTitle", "abilityCatalogMessage", "abilityCatalogList",
+        "openRitualCatalog", "ritualCatalogDialog", "closeRitualCatalog", "ritualCatalogElements", "ritualCatalogCircles", "ritualCatalogSearch", "ritualCatalogGroupTitle", "ritualCatalogMessage", "ritualCatalogList",
         "inventoryList", "abilitiesList", "ritualsList", "equippedWeapon",
         "defenseValue", "blockValue", "dodgeValue", "protectionValue", "resistanceValue", "proficiencyValue", "defenseExplanation",
         "defenseBonus", "blockBonus", "dodgeBonus", "resistanceNotes", "proficiencyNotes", "equipmentMessage",
@@ -139,6 +143,9 @@ function openCharacter(character, options = {}) {
     vm.runInContext(fs.readFileSync(path.join(root, "origins.js"), "utf8"), context);
     vm.runInContext(fs.readFileSync(path.join(root, "equipment-catalog.js"), "utf8"), context);
     vm.runInContext(fs.readFileSync(path.join(root, "equipment-rules.js"), "utf8"), context);
+    vm.runInContext(fs.readFileSync(path.join(root, "ability-catalog.js"), "utf8"), context);
+    vm.runInContext(fs.readFileSync(path.join(root, "ritual-catalog.js"), "utf8"), context);
+    vm.runInContext(fs.readFileSync(path.join(root, "sheet-mechanics.js"), "utf8"), context);
     if (options.catalogCollections) context.window.REAL_EQUIPMENT_COLLECTIONS = [...context.window.REAL_EQUIPMENT_COLLECTIONS, ...options.catalogCollections];
     if (options.catalogItems) context.window.REAL_EQUIPMENT_CATALOG = [...context.window.REAL_EQUIPMENT_CATALOG, ...options.catalogItems];
     vm.runInContext(fs.readFileSync(path.join(root, "personagem.js"), "utf8"), context);
@@ -229,7 +236,7 @@ assert.equal(ids.attributeWheelValues.children[3].getAttribute("aria-label"), "P
 const attributeEdit = openCharacter(JSON.parse(JSON.stringify(character)), { dice: [15, 2, 18, 7] });
 const editWheel = attributeEdit.ids.attributeWheelValues;
 const editButton = attributeEdit.ids.toggleAttributeEdit;
-assert.equal(editWheel.children[1].children[1].disabled, true, "a roda começa em modo de leitura");
+assert.equal(editWheel.children[1].children[1].disabled, false, "a roda permite rolar fora do modo de edição");
 editButton.click();
 assert.equal(editButton.getAttribute("aria-pressed"), "true");
 assert.equal(editWheel.dataset.editing, "true");
@@ -275,7 +282,7 @@ forceMarker.children[2].handlers.keydown({ key: "Escape", preventDefault() {} })
 assert.equal(forceMarker.children[0].textContent, "-3", "Escape cancela a digitação");
 editButton.click();
 assert.equal(editButton.getAttribute("aria-pressed"), "false");
-assert.equal(forceMarker.children[1].disabled, true);
+assert.equal(forceMarker.children[1].disabled, false);
 assert.equal(attributeEdit.ids.attributeEditHint.hidden, true);
 const attributeReload = openCharacter(attributeEdit.saved().characters[0]);
 assert.equal(attributeReload.ids.attributeWheelValues.children[1].children[0].textContent, "-3");
@@ -296,7 +303,7 @@ originToggle.click();
 assert.equal(originToggle.getAttribute("aria-expanded"), "true");
 assert.equal(originDetails.hidden, false);
 assert.equal(originDetails.children[0].textContent, "Habilidade de origem · Amnésico");
-assert.equal(originDetails.children[1].textContent, "Uma vez por sessão, faça um teste de Intelecto (DT 10) ao encontrar alguém ou algum lugar familiar. Se passar, receba 1d4 PE temporários e uma informação útil, a critério do mestre.");
+assert.equal(originDetails.children[1].textContent, require("../origins.js").find((origin) => origin.id === "amnesico").effect);
 assert.equal(originDetails.children.some((child) => child.tag === "button"), false, "a habilidade da origem não pode ser removida");
 originToggle.click();
 assert.equal(originDetails.hidden, true, "clicar novamente fecha a habilidade");
@@ -776,7 +783,7 @@ manualAbility.children[0].click();
 assert.equal(refreshedOrigin.children[1].hidden, true, "abrir outra habilidade fecha a anterior");
 assert.equal(refreshedOrigin.children[0].getAttribute("aria-expanded"), "false");
 assert.equal(manualAbility.children[1].hidden, false);
-assert.equal(manualAbility.children[1].children[0].textContent, "Habilidade adicionada");
+assert.equal(manualAbility.children[1].children[0].textContent, "Habilidade criada");
 assert.equal(manualAbility.children[1].children[1].textContent, "Uma habilidade anotada pelo jogador.");
 
 inventoryFilters[2].click();
@@ -889,7 +896,7 @@ assert.equal(legacyItems.ids.inventoryList.children[0].children[0].textContent, 
 
 for (const [originId, originName, ability, description] of [
     ["criminoso", "Criminoso", "O Crime Compensa", "Ao fim de uma missão, escolha um item encontrado. Na próxima missão, ele pode entrar no inventário sem contar no limite de itens por patente."],
-    ["cultista-arrependido", "Cultista Arrependido", "Traços do Outro Lado", "Escolha um poder paranormal. Você começa o jogo com metade da Sanidade normal para a sua classe."]
+    ["cultista-arrependido", "Cultista Arrependido", "Traços do Outro Lado", require("../origins.js").find((origin) => origin.id === "cultista-arrependido").effect]
 ]) {
     const originView = openCharacter({ ...character, origin: originId, originName });
     const originRow = originView.ids.abilitiesList.children[0];
@@ -1020,6 +1027,16 @@ for (const row of freeSkillRolls.ids.skillsBody.children) {
 }
 
 const criminal = openCharacter({ ...character, origin: "criminoso", originName: "Criminoso" }, { dice: [12] });
+for (const origin of require("../origins.js")) {
+    const view = openCharacter({ ...character, origin: origin.id, originName: origin.name });
+    assert.equal(view.ids.characterOrigin.textContent, origin.name);
+    assert.equal(view.ids.abilitiesList.children[0].children[0].textContent, origin.ability, `${origin.name}: habilidade automática`);
+    assert.equal(view.ids.abilitiesList.children[0].children[1].children[1].textContent, origin.effect);
+    const trained = view.ids.skillsBody.children.filter((row) => row.dataset.trained === "true");
+    assert.equal(trained.length, origin.trainedSkills.length, `${origin.name}: quantidade de perícias treinadas`);
+    for (const row of trained) assert.equal(row.children[3].children[0].value, "5", `${origin.name}: treino +5`);
+    assert.equal(view.ids.originTrainingChoices.hidden, origin.id !== "amnesico");
+}
 for (const index of [6, 10]) {
     const row = criminal.ids.skillsBody.children[index];
     assert.equal(row.dataset.trained, "true", "a origem treina a perícia sem edição manual");
@@ -1288,4 +1305,226 @@ katanaTraining.handlers.change();
 assert.equal(conflictingKatana.ids.defenseValue.textContent, "14", "perder a condição de uma mão suspende o bônus do escudo");
 combatControl(conflictingKatana, "attack").click();
 assert.match(conflictingKatana.ids.skillRollResult.getAttribute("aria-label"), /Corrija o equipamento/);
-console.log("Ficha desktop e celular: NEX, recursos, perícias, atributos, equipamento, combate e salvamento: OK");
+function catalogAbility(view, name) {
+    return view.ids.abilityCatalogList.children.find(row => row.children[0]?.children[0]?.textContent === name);
+}
+function queryAbility(view, query) {
+    view.ids.abilityCatalogSearch.value = query;
+    view.ids.abilityCatalogSearch.handlers.input();
+}
+const abilityView = openCharacter({ ...character, sheet: { habilidades: [{ id: "manual", name: "Talento da mesa", description: "Continua aqui" }] } });
+abilityView.ids.openAbilityCatalog.click();
+assert.equal(abilityView.ids.abilityCatalogDialog.open, true);
+assert.equal(abilityView.ids.abilityCatalogList.children.length, 18, "abre inicialmente a classe da ficha");
+abilityView.ids.abilityCatalogCategories.children.find(button => button.textContent === "Combatente").click();
+abilityView.ids.abilityCatalogSubgroups.children.find(button => button.textContent === "Guerreiro").click();
+assert.equal(abilityView.ids.abilityCatalogList.children.length, 4);
+const lethalRow = catalogAbility(abilityView, "Técnica Letal");
+lethalRow.children[0].click();
+assert.equal(lethalRow.children[1].hidden, false);
+assert.match(lethalRow.children[0].children[1].textContent, /Guerreiro.*NEX 10%/);
+catalogAbility(abilityView, "Revidar").children[0].click();
+assert.equal(lethalRow.children[1].hidden, true, "só um painel expandido por vez");
+queryAbility(abilityView, "tÉcNiCa LeTaL");
+assert.equal(abilityView.ids.abilityCatalogList.children.length, 1, "busca global ignora acentos e caixa");
+queryAbility(abilityView, "habilidade-que-nao-existe");
+assert.match(abilityView.ids.abilityCatalogList.children[0].textContent, /Nenhuma habilidade encontrada/);
+queryAbility(abilityView, "sangue de ferro");
+const bloodRow = catalogAbility(abilityView, "Sangue de Ferro");
+bloodRow.children[0].click();
+const bloodPanel = bloodRow.children[1];
+bloodPanel.children.find(child => child.className === "ability-catalog__affinity").children[0].checked = true;
+bloodPanel.children.find(child => child.className === "ability-catalog__notes").children[0].value = "<script>texto literal</script>";
+const previousMaximum = abilityView.ids.vidaMaximum.textContent;
+bloodPanel.children.find(child => child.getAttribute("aria-label") === "Adicionar Sangue de Ferro à ficha").click();
+assert.equal(abilityView.ids.abilityCatalogDialog.open, false);
+assert.equal(abilityView.ids.openAbilityCatalog.focused, true);
+assert.equal(abilityView.saved().characters[0].sheet.habilidades.length, 2);
+const addedBlood = abilityView.saved().characters[0].sheet.habilidades[1];
+assert.equal(addedBlood.name, "Sangue de Ferro (Afinidade)");
+assert.equal(addedBlood.affinity, true);
+assert.match(addedBlood.description, /Afinidade:.*Fortitude/);
+assert.match(addedBlood.description, /<script>texto literal<\/script>/);
+assert.equal(Number(abilityView.ids.vidaMaximum.textContent), Number(previousMaximum) + 2, "Sangue de Ferro acrescenta dois PV por nível com automações ligadas");
+const abilityReload = openCharacter(abilityView.saved().characters[0]);
+assert.equal(abilityReload.ids.abilitiesList.children.length, 3, "origem automática, habilidade antiga e habilidade do catálogo permanecem");
+abilityReload.ids.openAbilityCatalog.click();
+queryAbility(abilityReload, "sangue de ferro");
+assert.equal(catalogAbility(abilityReload, "Sangue de Ferro").children[1].children.at(-1).disabled, true);
+queryAbility(abilityReload, "vislumbres do passado");
+assert.equal(catalogAbility(abilityReload, "Vislumbres do Passado").children[1].children.at(-1).disabled, true, "não duplica a origem automática");
+for (let i = 0; i < 2; i++) {
+    abilityReload.ids.openAbilityCatalog.click();
+    queryAbility(abilityReload, "transcender");
+    const transcendRow = catalogAbility(abilityReload, "Transcender");
+    assert.equal(transcendRow.children[1].children.at(-1).disabled, false);
+    transcendRow.children[1].children.at(-1).click();
+}
+assert.equal(abilityReload.saved().characters[0].sheet.habilidades.length, 4, "poderes repetíveis podem ser adicionados novamente");
+const abilitySaveFailure = openCharacter({ ...character, sheet: { habilidades: [{ id: "old", name: "Não apagar" }] } }, { failStorage: true });
+abilitySaveFailure.ids.openAbilityCatalog.click();
+queryAbility(abilitySaveFailure, "golpe pesado");
+catalogAbility(abilitySaveFailure, "Golpe Pesado").children[1].children.at(-1).click();
+assert.equal(abilitySaveFailure.saved().characters[0].sheet.habilidades.length, 1);
+assert.equal(vm.runInContext("character.sheet.habilidades.length", abilitySaveFailure.context), 1, "falha também reverte os dados em memória");
+assert.equal(abilitySaveFailure.ids.abilityCatalogDialog.open, true);
+assert.match(abilitySaveFailure.ids.abilityCatalogMessage.textContent, /não foi adicionada/);
+abilitySaveFailure.ids.closeAbilityCatalog.click();
+assert.equal(abilitySaveFailure.ids.abilityCatalogDialog.open, false);
+function catalogRitual(view, name) { return view.ids.ritualCatalogList.children.find(row => row.children[0]?.children[0]?.textContent === name); }
+function queryRitual(view, query) { view.ids.ritualCatalogSearch.value = query; view.ids.ritualCatalogSearch.handlers.input(); }
+const ritualView = openCharacter({ ...character, sheet: { rituais: [{ id: "old-ritual", name: "Ritual da mesa", description: "Preservado" }] } });
+ritualView.ids.openRitualCatalog.click();
+assert.equal(ritualView.ids.ritualCatalogDialog.open, true);
+assert.equal(ritualView.ids.ritualCatalogList.children.length, 83);
+ritualView.ids.ritualCatalogElements.children.find(button => button.textContent === "Morte").click();
+assert.equal(ritualView.ids.ritualCatalogList.children.length, 19);
+ritualView.ids.ritualCatalogCircles.children.find(button => button.textContent === "1º círculo").click();
+assert.equal(ritualView.ids.ritualCatalogList.children.length, 6);
+queryRitual(ritualView, "cIcAtRiZaÇaO");
+assert.equal(ritualView.ids.ritualCatalogList.children.length, 1);
+const healingRow = catalogRitual(ritualView, "Cicatrização"); healingRow.children[0].click();
+assert.equal(healingRow.children[1].hidden, false);
+const healingPanel = healingRow.children[1];
+const healingVersions = healingPanel.children.find(child => child.className.includes("ritual-catalog__versions"));
+assert.equal(healingVersions.children.length, 3);
+healingVersions.children.find(button => button.textContent === "Verdadeiro").click();
+assert.match(healingPanel.children.find(child => child.className === "catalog-item__description").textContent, /Verdadeiro · 10 PE \(1 \+ 9\).*7d8\+7/s);
+assert.match(healingPanel.children.find(child => child.className === "catalog-item__classification").textContent, /4º círculo.*Afinidade com Morte/);
+healingPanel.children.find(child => child.className === "ability-catalog__notes").children[0].value = "<img>texto literal";
+const ritualPe = ritualView.ids.esforcoCurrent.value; const ritualSan = ritualView.ids.sanidadeCurrent.value;
+healingPanel.children.at(-1).click();
+assert.equal(ritualView.ids.ritualCatalogDialog.open, false);
+assert.equal(ritualView.ids.openRitualCatalog.focused, true);
+assert.equal(ritualView.saved().characters[0].sheet.rituais.length, 2);
+const storedHealing = ritualView.saved().characters[0].sheet.rituais[1];
+assert.equal(storedHealing.name, "Cicatrização", "consultar verdadeiro não aprende um ritual separado");
+assert.equal(storedHealing.cost, 1);
+assert.equal(storedHealing.versions.verdadeiro.extraCost, 9);
+assert.match(storedHealing.description, /Discente.*Verdadeiro/s);
+assert.match(storedHealing.description, /<img>texto literal/);
+assert.equal(ritualView.ids.esforcoCurrent.value, ritualPe, "registrar não gasta PE");
+assert.equal(ritualView.ids.sanidadeCurrent.value, ritualSan, "registrar não gasta SAN");
+const ritualReload = openCharacter(ritualView.saved().characters[0]);
+assert.equal(ritualReload.ids.ritualsList.children.length, 2);
+assert.equal(ritualReload.ids.ritualsList.children[0].children[1].children[0].textContent, "Ritual", "rituais personalizados antigos permanecem compatíveis");
+assert.match(ritualReload.ids.ritualsList.children[1].children[1].children[0].textContent, /Morte · 1º círculo · 1 PE/);
+assert.match(ritualReload.ids.ritualsList.children[1].children[1].children[1].textContent, /Alcance: toque/);
+ritualReload.ids.openRitualCatalog.click(); queryRitual(ritualReload, "cicatrizacao");
+assert.equal(catalogRitual(ritualReload, "Cicatrização").children[1].children.at(-1).disabled, true);
+queryRitual(ritualReload, "nao-existe");
+assert.match(ritualReload.ids.ritualCatalogList.children[0].textContent, /Nenhum ritual/);
+queryRitual(ritualReload, "");
+const firstRitualRow = ritualReload.ids.ritualCatalogList.children[0]; firstRitualRow.children[0].click();
+ritualReload.ids.ritualCatalogList.children[1].children[0].click();
+assert.equal(firstRitualRow.children[1].hidden, true, "um ritual expandido por vez");
+for (const element of ["Sangue", "Energia"]) {
+    ritualReload.ids.openRitualCatalog.click(); queryRitual(ritualReload, "amaldiçoar arma");
+    const variablePanel = catalogRitual(ritualReload, "Amaldiçoar Arma").children[1];
+    const select = variablePanel.children.find(child => child.children[0]?.tag === "select").children[0];
+    select.value = element; select.handlers.change();
+    assert.equal(variablePanel.children.at(-1).disabled, false); variablePanel.children.at(-1).click();
+}
+assert.equal(ritualReload.saved().characters[0].sheet.rituais.length, 4);
+assert.equal(ritualReload.saved().characters[0].sheet.rituais[2].name, "Amaldiçoar Arma (Sangue)");
+ritualReload.ids.openRitualCatalog.click(); queryRitual(ritualReload, "amaldiçoar arma");
+const variablePanel = catalogRitual(ritualReload, "Amaldiçoar Arma").children[1];
+const variableSelect = variablePanel.children.find(child => child.children[0]?.tag === "select").children[0];
+variableSelect.value = "Sangue"; variableSelect.handlers.change();
+assert.equal(variablePanel.children.at(-1).disabled, true);
+variablePanel.children.at(-1).click();
+assert.equal(ritualReload.saved().characters[0].sheet.rituais.length, 4, "proteção contra duplicata também existe no manipulador");
+const ritualSaveFailure = openCharacter({ ...character, sheet: { rituais: [{ id: "keep", name: "Preservar" }] } }, { failStorage: true });
+ritualSaveFailure.ids.openRitualCatalog.click(); queryRitual(ritualSaveFailure, "decadencia");
+catalogRitual(ritualSaveFailure, "Decadência").children[1].children.at(-1).click();
+assert.equal(ritualSaveFailure.saved().characters[0].sheet.rituais.length, 1);
+assert.equal(vm.runInContext("character.sheet.rituais.length", ritualSaveFailure.context), 1);
+assert.equal(ritualSaveFailure.ids.ritualCatalogDialog.open, true);
+assert.match(ritualSaveFailure.ids.ritualCatalogMessage.textContent, /não foi adicionado/);
+ritualSaveFailure.ids.closeRitualCatalog.click(); assert.equal(ritualSaveFailure.ids.ritualCatalogDialog.open, false);
+const systemView = openCharacter({ ...character, nex: 40, sheet: { resources: {
+    vida: { current: 39, max: 45, bonus: 0 }, esforco: { current: 17, max: 24, bonus: 0 },
+    sanidade: { current: 37, max: 44, bonus: 0 }, determinacao: { current: 42, max: 69 }
+} } });
+assert.equal(systemView.ids.resourceSystemName.textContent, "Esforço e Sanidade");
+assert.equal(systemView.ids.determinacaoResource.hidden, true);
+const normalValues = [systemView.ids.vidaValue.textContent, systemView.ids.esforcoValue.textContent, systemView.ids.sanidadeValue.textContent];
+systemView.ids.chooseResourceSystem.click(); assert.equal(systemView.ids.resourceSystemDialog.open, true);
+systemView.ids.cancelResourceSystem.click(); assert.equal(systemView.ids.resourceSystemDialog.open, false);
+assert.equal(systemView.saved().characters[0].sheet.resourceSystem, undefined, "cancelar não modifica os dados salvos");
+systemView.ids.chooseResourceSystem.click(); systemView.ids.useDetermination.click();
+assert.equal(systemView.ids.resourceSystemDialog.open, false);
+assert.equal(systemView.ids.esforcoResource.hidden, true); assert.equal(systemView.ids.sanidadeResource.hidden, true);
+assert.equal(systemView.ids.determinacaoResource.hidden, false);
+assert.equal(systemView.ids.determinacaoValue.textContent, "42");
+assert.equal(systemView.ids.determinacaoMaximum.textContent, "69");
+assert.equal(systemView.ids.pePerTurn.textContent, "—", "não inventa limite de PD");
+systemView.ids.determinacaoDecrease.click();
+systemView.ids.determinacaoTurnInput.value = "9"; systemView.ids.determinacaoTurnInput.handlers.change();
+assert.equal(systemView.ids.pePerTurn.textContent, "9");
+assert.equal(systemView.ids.ritualDifficulty.textContent, "18", "limite manual de PD não altera DT");
+systemView.ids.determinacaoMaxInput.value = "79"; systemView.ids.determinacaoMaxInput.handlers.change();
+assert.equal(systemView.ids.determinacaoValue.textContent, "51", "mudar máximo preserva PD gastos");
+systemView.ids.determinacaoMaxInput.value = "-1"; systemView.ids.determinacaoMaxInput.handlers.change();
+assert.equal(systemView.ids.determinacaoMaxInput.value, "79");
+systemView.ids.useEffortSanity.click();
+assert.deepEqual([systemView.ids.vidaValue.textContent, systemView.ids.esforcoValue.textContent, systemView.ids.sanidadeValue.textContent], normalValues);
+systemView.ids.useDetermination.click();
+const systemReload = openCharacter(systemView.saved().characters[0]);
+assert.equal(systemReload.ids.resourceSystemName.textContent, "Determinação");
+assert.equal(systemReload.ids.determinacaoValue.textContent, "51");
+assert.equal(systemReload.ids.pePerTurn.textContent, "9");
+const systemFailure = openCharacter({ ...character, sheet: {} }, { failStorage: true });
+systemFailure.ids.chooseResourceSystem.click(); systemFailure.ids.useDetermination.click();
+assert.equal(systemFailure.ids.resourceSystemName.textContent, "Esforço e Sanidade");
+assert.equal(systemFailure.ids.resourceSystemDialog.open, true, "troca não confirmada se falhou o salvamento");
+const attributeRoll = openCharacter({ ...character, sheet: {} }, { dice: [4, 18, 3, 9] });
+attributeRoll.ids.attributeWheelValues.children[0].children[1].click();
+assert.match(attributeRoll.ids.skillRollResult.getAttribute("aria-label"), /Agilidade: 4d20.*Maior dado: 18.*Total: 18/);
+attributeRoll.ids.attributeWheelValues.children[3].children[1].click();
+assert.match(attributeRoll.ids.skillRollResult.getAttribute("aria-label"), /Presença: 2d20.*Menor dado: 4/);
+assert.equal(attributeRoll.saved().characters[0].attributes.agilidade, 4, "rolar não edita atributos");
+attributeRoll.ids.freeRollExpression.value = "2d6+3";
+attributeRoll.ids.freeRollForm.handlers.submit({ preventDefault() {} });
+assert.match(attributeRoll.ids.skillRollResult.getAttribute("aria-label"), /Rolagem livre.*Total: 7/);
+const powerApi = require("../ability-catalog.js"); const ritualApi = require("../ritual-catalog.js");
+const powerEntry = name => powerApi.entry(powerApi.catalog.find(item => item.name === name), name, false);
+const healing = ritualApi.entry(ritualApi.catalog.find(item => item.name === "Cicatrização"), "healing", "", "");
+const powerView = openCharacter({ ...character, nex: 40, sheet: {
+    habilidades: [powerEntry("Sangue de Ferro"), powerEntry("Ritual Potente"), powerEntry("Sensitivo")], rituais: [healing]
+} }, { dice: [1] });
+assert.equal(powerView.ids.vidaMaximum.textContent, "61");
+assert.match(powerView.ids.automaticEffectsSummary.textContent, /Sangue de Ferro/);
+const healingControls = powerView.ids.ritualsList.children[0].children[1].children.find(child => child.className === "ritual-rolls");
+assert.equal(healingControls.children.length, 3);
+const resourcesBeforeRoll = JSON.stringify(vm.runInContext("character.sheet.resources", powerView.context));
+healingControls.children[2].click();
+assert.match(powerView.ids.skillRollResult.getAttribute("aria-label"), /Cicatrização · Verdadeiro.*bônus automático \+3.*Total: 17/);
+assert.equal(JSON.stringify(vm.runInContext("character.sheet.resources", powerView.context)), resourcesBeforeRoll, "dados não gastam recurso nem curam");
+powerView.ids.automaticEffects.checked = false; powerView.ids.automaticEffects.handlers.change();
+assert.equal(powerView.ids.vidaMaximum.textContent, "45");
+assert.equal(powerView.saved().characters[0].sheet.automaticEffects, false);
+healingControls.children[0].click();
+assert.match(powerView.ids.skillRollResult.getAttribute("aria-label"), /Total: 6/);
+const meleeView = openCharacter({ ...character, sheet: { habilidades: [powerEntry("Golpe Pesado"), powerEntry("Mão Pesada"),
+    powerApi.entry(powerApi.catalog.find(item => item.name === "Golpe de Sorte"), "luck", true)],
+    inventario: [{ id: "blade", name: "Arma de teste", category: "armas", weaponStyle: "Corpo a Corpo", damage: "1d6", critical: "20", combat: { extraDamage: "1d8" } }],
+    equippedWeaponId: "blade"
+} }, { dice: [1] });
+function damageAction(view, action) { return view.ids.equippedWeapon.children.find(child => child.className === "combat-actions").children.find(child => child.dataset.combatAction === action); }
+damageAction(meleeView, "damage").click();
+assert.match(meleeView.ids.skillRollResult.getAttribute("aria-label"), /2d6: 1, 1.*bônus fixo \+3.*Total: 6/);
+damageAction(meleeView, "critical").click();
+assert.match(meleeView.ids.skillRollResult.getAttribute("aria-label"), /6d6: 1, 1, 1, 1, 1, 1.*extra 1d8: 1.*Total: 10/);
+assert.ok(meleeView.ids.equippedWeapon.children.some(child => child.textContent.includes("crítico efetivo 19/x3")));
+const dynamicView = openCharacter(abilityView.saved().characters[0]);
+dynamicView.ids.vidaDecrease.click();
+const lossBefore = Number(dynamicView.ids.vidaMaximum.textContent) - Number(dynamicView.ids.vidaValue.textContent);
+dynamicView.ids.nexSelect.value = "40"; dynamicView.ids.nexSelect.handlers.change();
+assert.equal(Number(dynamicView.ids.vidaMaximum.textContent) - Number(dynamicView.ids.vidaValue.textContent), lossBefore);
+const bloodEntryRow = dynamicView.ids.abilitiesList.children.find(row => row.children[0].textContent === "Sangue de Ferro (Afinidade)");
+bloodEntryRow.children[1].children.at(-1).click();
+assert.equal(dynamicView.ids.vidaMaximum.textContent, "45", "remover poder recalcula máximos");
+assert.equal(Number(dynamicView.ids.vidaMaximum.textContent) - Number(dynamicView.ids.vidaValue.textContent), lossBefore);
+assert.equal(openCharacter(dynamicView.saved().characters[0]).ids.vidaMaximum.textContent, "45");
+console.log("Ficha desktop e celular: sistemas de recursos, atributos, poderes, combate e rituais: OK");

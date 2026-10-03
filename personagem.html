@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#111113">
     <title>Ficha de personagem | R.E.A.L</title>
-    <link rel="stylesheet" href="personagem.css?v=20260930-combat">
+    <link rel="stylesheet" href="personagem.css?v=20261002-mechanics">
     <link rel="stylesheet" href="visitor-name.css?v=20260928-visitor">
     <script src="visitor-name.js?v=20260928-visitor"></script>
 </head>
@@ -91,30 +91,40 @@
                         <div id="attributeWheelValues" class="attribute-wheel__values" role="group" aria-label="Valores dos atributos"></div>
                         <button id="toggleAttributeEdit" class="attribute-wheel__edit" type="button" aria-label="Editar atributos" aria-pressed="false" title="Editar atributos">✎</button>
                     </figure>
+                    <p class="attribute-roll-hint">Clique em um atributo para rolar. Use o lápis para editar.</p>
                     <p id="attributeEditHint" class="attribute-edit-hint" role="status" aria-live="polite" hidden>Selecione um atributo na roda, digite um inteiro de −100 a 100 e pressione Enter. Clique no lápis novamente para concluir.</p>
                     </div>
                     <div class="attribute-details">
                         <div class="stat-grid">
                             <div class="nex-stat"><label for="nexSelect">NEX</label><select id="nexSelect" aria-label="Nível de exposição paranormal"></select></div>
-                            <div><span>PE / turno</span><strong id="pePerTurn">—</strong></div>
+                            <div><span id="effortLimitLabel">PE / turno</span><strong id="pePerTurn">—</strong></div>
                             <div><span>Deslocamento</span><strong>—</strong></div>
                         </div>
                         <p id="nexExplanation" class="nex-explanation"></p>
                         <div class="resource-list">
+                            <button id="chooseResourceSystem" class="resource-system" type="button" aria-haspopup="dialog"><span>Sistema da ficha</span><strong id="resourceSystemName">Esforço e Sanidade</strong><small>Clique para escolher ▾</small></button>
                             <section class="resource-item" data-resource="vida" aria-label="Pontos de Vida">
                                 <div class="resource-item__heading"><strong>Vida</strong><span><output id="vidaValue">—</output> / <output id="vidaMaximum">—</output> PV</span></div>
                                 <div class="resource-item__controls"><button id="vidaDecrease" type="button" aria-label="Diminuir Vida em 1">−</button><label>Valor atual<input id="vidaCurrent" type="number" min="0" step="1" inputmode="numeric" aria-label="Vida atual"></label><button id="vidaIncrease" type="button" aria-label="Aumentar Vida em 1">+</button></div>
                                 <progress id="vidaProgress" max="1" value="0" aria-label="Vida restante"></progress>
                             </section>
-                            <section class="resource-item" data-resource="esforco" aria-label="Pontos de Esforço">
+                            <section id="esforcoResource" class="resource-item" data-resource="esforco" aria-label="Pontos de Esforço">
                                 <div class="resource-item__heading"><strong>Esforço</strong><span><output id="esforcoValue">—</output> / <output id="esforcoMaximum">—</output> PE</span></div>
                                 <div class="resource-item__controls"><button id="esforcoDecrease" type="button" aria-label="Diminuir Esforço em 1">−</button><label>Valor atual<input id="esforcoCurrent" type="number" min="0" step="1" inputmode="numeric" aria-label="Esforço atual"></label><button id="esforcoIncrease" type="button" aria-label="Aumentar Esforço em 1">+</button></div>
                                 <progress id="esforcoProgress" max="1" value="0" aria-label="Esforço restante"></progress>
                             </section>
-                            <section class="resource-item" data-resource="sanidade" aria-label="Pontos de Sanidade">
+                            <section id="sanidadeResource" class="resource-item" data-resource="sanidade" aria-label="Pontos de Sanidade">
                                 <div class="resource-item__heading"><strong>Sanidade</strong><span><output id="sanidadeValue">—</output> / <output id="sanidadeMaximum">—</output> SAN</span></div>
                                 <div class="resource-item__controls"><button id="sanidadeDecrease" type="button" aria-label="Diminuir Sanidade em 1">−</button><label>Valor atual<input id="sanidadeCurrent" type="number" min="0" step="1" inputmode="numeric" aria-label="Sanidade atual"></label><button id="sanidadeIncrease" type="button" aria-label="Aumentar Sanidade em 1">+</button></div>
                                 <progress id="sanidadeProgress" max="1" value="0" aria-label="Sanidade restante"></progress>
+                            </section>
+                            <section id="determinacaoResource" class="resource-item" data-resource="determinacao" aria-label="Pontos de Determinação" hidden>
+                                <div class="resource-item__heading"><strong>Determinação</strong><span><output id="determinacaoValue">—</output> / <output id="determinacaoMaximum">—</output> PD</span></div>
+                                <div class="resource-item__controls"><button id="determinacaoDecrease" type="button" aria-label="Diminuir Determinação em 1">−</button><label>Valor atual<input id="determinacaoCurrent" type="number" min="0" step="1" inputmode="numeric" aria-label="Determinação atual"></label><button id="determinacaoIncrease" type="button" aria-label="Aumentar Determinação em 1">+</button></div>
+                                <progress id="determinacaoProgress" max="1" value="0" aria-label="Determinação restante"></progress>
+                                <label class="determination-maximum">Máximo de PD<input id="determinacaoMaxInput" type="number" min="0" max="99999" step="1" inputmode="numeric"></label>
+                                <label class="determination-maximum">PD por turno<input id="determinacaoTurnInput" type="number" min="0" max="99999" step="1" inputmode="numeric" placeholder="Defina conforme sua mesa"></label>
+                                <p class="pending-note">Defina o máximo conforme as regras da sua mesa. A fórmula de PD ainda não foi confirmada; não convertemos PE e Sanidade automaticamente.</p>
                             </section>
                         </div>
                         <p id="resourceMessage" class="resource-message" role="status" aria-live="polite"></p>
@@ -166,6 +176,7 @@
             <section id="panel-combate" class="sheet-panel" role="tabpanel" aria-labelledby="tab-combate" hidden>
                 <div class="section-heading"><span class="eyebrow">EM CONFRONTO</span><h2>Combate</h2></div>
                 <div class="combat-equipped"><h3>Arma equipada</h3><div id="equippedWeapon" aria-live="polite"></div></div>
+                <form id="freeRollForm" class="free-roll"><label for="freeRollExpression">Rolagem livre · soma dos dados<input id="freeRollExpression" maxlength="120" placeholder="Ex.: 2d6+3 ou 2d8+1d6+2" required></label><button type="submit" class="button button--ghost">Rolar dados</button></form>
                 <p class="pending-note">O ataque usa os dados da ficha. Compare o total com a Defesa do alvo; uma ameaça de crítico não confirma um acerto. Munição, ações, PE e efeitos especiais não são consumidos automaticamente.</p>
             </section>
             <section id="panel-inventario" class="sheet-panel" role="tabpanel" aria-labelledby="tab-inventario" hidden>
@@ -185,13 +196,17 @@
             </section>
             <section id="panel-habilidades" class="sheet-panel" role="tabpanel" aria-labelledby="tab-habilidades" hidden>
                 <div class="section-heading"><span class="eyebrow">O QUE SABE FAZER</span><h2>Habilidades</h2></div>
-                <div class="section-actions"><p>A habilidade da origem aparece automaticamente aqui. Você também pode registrar outras habilidades do personagem.</p><button type="button" class="button button--primary" data-add-entry="habilidades">+ Adicionar habilidade</button></div>
+                <div class="section-actions"><p>Consulte poderes, trilhas, origens e poderes paranormais do livro básico. A habilidade da origem reconhecida continua aparecendo automaticamente.</p><div class="section-actions__buttons"><button type="button" class="button button--ghost" data-add-entry="habilidades">Criar habilidade</button><button id="openAbilityCatalog" type="button" class="button button--primary">Adicionar habilidade</button></div></div>
+                <label class="mechanics-toggle"><input id="automaticEffects" type="checkbox" checked> Aplicar bônus permanentes conferidos</label>
+                <p id="automaticEffectsSummary" class="pending-note"></p>
+                <p class="pending-note">Não repita nos ajustes manuais os bônus listados acima. Outros poderes, pré-requisitos, condições, custos, imunidades e efeitos continuam sob controle da mesa.</p>
                 <div id="abilitiesList" class="entry-list entry-list--accordion"></div>
             </section>
             <section id="panel-rituais" class="sheet-panel" role="tabpanel" aria-labelledby="tab-rituais" hidden>
                 <div class="section-heading"><span class="eyebrow">CONHECIMENTO PARANORMAL</span><h2>Rituais</h2></div>
                 <div class="stat-grid stat-grid--single"><div><span>DT de rituais</span><strong id="ritualDifficulty">—</strong></div></div>
-                <div class="section-actions"><p>Registre os rituais conhecidos. A DT será definida com as regras dessa etapa.</p><button type="button" class="button button--primary" data-add-entry="rituais">+ Adicionar ritual</button></div>
+                <div class="section-actions"><p>Consulte os rituais por elemento e círculo. A DT acima acompanha a Presença e o NEX da ficha.</p><div class="section-actions__buttons"><button type="button" class="button button--ghost" data-add-entry="rituais">Criar ritual</button><button id="openRitualCatalog" type="button" class="button button--primary">Adicionar ritual</button></div></div>
+                <p class="pending-note">Registrar um ritual não o conjura. Os botões disponíveis somam os dados da forma escolhida, sem gastar recursos ou aplicar dano ou cura ao alvo. Requisitos e resistências continuam sob controle da mesa.</p>
                 <div id="ritualsList" class="entry-list entry-list--accordion"></div>
             </section>
             <p id="storageNote" class="storage-note" role="status">Esta ficha está salva neste navegador.</p>
@@ -199,6 +214,14 @@
     </main>
 
     <div id="skillRollResult" class="skill-roll-result" role="status" aria-live="polite" hidden></div>
+
+    <dialog id="resourceSystemDialog" class="entry-dialog resource-system-dialog" aria-labelledby="resourceSystemTitle">
+        <h2 id="resourceSystemTitle">Qual sistema você quer usar?</h2>
+        <p>A Vida permanece igual. Os valores dos dois sistemas são guardados separadamente, inclusive quando ficam ocultos.</p>
+        <button id="useEffortSanity" class="resource-system-choice" type="button"><strong>Esforço e Sanidade</strong><span>PE e SAN em barras separadas · Livro de Regras</span></button>
+        <button id="useDetermination" class="resource-system-choice" type="button"><strong>Determinação</strong><span>Uma barra de PD · Sobrevivendo ao Horror</span></button>
+        <div class="entry-dialog__actions"><button id="cancelResourceSystem" class="button button--ghost" type="button">Cancelar</button></div>
+    </dialog>
 
     <dialog id="entryDialog" class="entry-dialog" aria-labelledby="entryDialogTitle">
         <form id="entryForm">
@@ -220,11 +243,37 @@
         <h3 id="catalogGroupTitle" class="catalog-group-title"></h3>
         <div id="catalogList" class="catalog-list"></div>
     </dialog>
+    <dialog id="abilityCatalogDialog" class="entry-dialog catalog-dialog ability-catalog" aria-labelledby="abilityCatalogTitle">
+        <div class="catalog-dialog__header"><div><span class="eyebrow">HABILIDADES DO LIVRO</span><h2 id="abilityCatalogTitle">Catálogo de habilidades</h2></div><button id="closeAbilityCatalog" type="button" class="button button--ghost">Fechar</button></div>
+        <div class="ability-catalog__book"><strong>Ordem Paranormal · Livro de Regras</strong><span>Resumos próprios; nomes e classificação conferidos no C.R.I.S.</span><a href="https://crisordemparanormal.com/" target="_blank" rel="noopener noreferrer">Consultar C.R.I.S.</a></div>
+        <nav id="abilityCatalogCategories" class="catalog-categories" aria-label="Categorias de habilidades"></nav>
+        <nav id="abilityCatalogSubgroups" class="catalog-categories ability-catalog__subgroups" aria-label="Poderes, trilhas e elementos"></nav>
+        <label class="ability-catalog__search" for="abilityCatalogSearch">Buscar habilidade<input id="abilityCatalogSearch" type="search" maxlength="100" placeholder="Nome, trilha, origem, elemento ou requisito"></label>
+        <h3 id="abilityCatalogGroupTitle" class="catalog-group-title"></h3>
+        <p class="pending-note">A busca inclui todas as categorias do livro. Afinidade é um aprimoramento escolhido separadamente, não um efeito automático de NEX 50%.</p>
+        <p class="pending-note">Nos pré-requisitos, “Conhecimento 1”, por exemplo, significa já possuir um poder de Conhecimento; não é um valor de atributo.</p>
+        <p id="abilityCatalogMessage" class="origin-training-message" role="status" aria-live="polite"></p>
+        <div id="abilityCatalogList" class="catalog-list"></div>
+    </dialog>
+    <dialog id="ritualCatalogDialog" class="entry-dialog catalog-dialog ability-catalog ritual-catalog" aria-labelledby="ritualCatalogTitle">
+        <div class="catalog-dialog__header"><div><span class="eyebrow">RITUAIS DO LIVRO</span><h2 id="ritualCatalogTitle">Catálogo de rituais</h2></div><button id="closeRitualCatalog" type="button" class="button button--ghost">Fechar</button></div>
+        <div class="ability-catalog__book"><strong>Ordem Paranormal · Livro de Regras</strong><span>83 rituais · Resumos próprios; classificação e parâmetros conferidos no C.R.I.S.</span><a href="https://crisordemparanormal.com/" target="_blank" rel="noopener noreferrer">Consultar C.R.I.S.</a></div>
+        <nav id="ritualCatalogElements" class="catalog-categories" aria-label="Elementos dos rituais"></nav>
+        <nav id="ritualCatalogCircles" class="catalog-categories ability-catalog__subgroups" aria-label="Círculos dos rituais"></nav>
+        <label class="ability-catalog__search" for="ritualCatalogSearch">Buscar ritual<input id="ritualCatalogSearch" type="search" maxlength="100" placeholder="Nome, elemento ou círculo"></label>
+        <h3 id="ritualCatalogGroupTitle" class="catalog-group-title"></h3>
+        <p class="pending-note">A busca respeita os filtros. Normal, discente e verdadeiro são formas de conjurar o mesmo ritual, não aprendizados separados. Custos são básicos, sem poderes, reduções ou sustentação; confira os requisitos e o preço de Sanidade no livro.</p>
+        <p id="ritualCatalogMessage" class="origin-training-message" role="status" aria-live="polite"></p>
+        <div id="ritualCatalogList" class="catalog-list"></div>
+    </dialog>
     <script src="attribute-themes.js?v=20260922-attribute-themes-final"></script>
-    <script src="nex-rules.js?v=20260927-nex-resources"></script>
-    <script src="origins.js?v=20260924-origin-training"></script>
+    <script src="nex-rules.js?v=20261002-mechanics"></script>
+    <script src="origins.js?v=20261002-origins"></script>
     <script src="equipment-catalog.js?v=20260930-cursed-items"></script>
-    <script src="equipment-rules.js?v=20260930-combat"></script>
-    <script src="personagem.js?v=20260930-combat"></script>
+    <script src="equipment-rules.js?v=20261002-mechanics"></script>
+    <script src="ability-catalog.js?v=20261002-abilities"></script>
+    <script src="ritual-catalog.js?v=20261002-rituals"></script>
+    <script src="sheet-mechanics.js?v=20261002-mechanics"></script>
+    <script src="personagem.js?v=20261002-mechanics"></script>
 </body>
 </html>

@@ -22,7 +22,7 @@
         return { dice, chosenIndex, useLowest };
     }
     function rollDamage(base, extra, multiplier, bonus, random = Math.random) {
-        if (!base || !Number.isInteger(multiplier) || multiplier < 1 || multiplier > 5 || !Number.isFinite(bonus)) return null;
+        if (!base || !Number.isInteger(multiplier) || multiplier < 1 || multiplier > 6 || !Number.isFinite(bonus)) return null;
         const dice = Array.from({ length: base.count * multiplier }, () => Math.floor(random() * base.sides) + 1);
         const extraDice = extra ? Array.from({ length: extra.count }, () => Math.floor(random() * extra.sides) + 1) : [];
         const fixed = base.bonus + (extra?.bonus || 0) + bonus;
