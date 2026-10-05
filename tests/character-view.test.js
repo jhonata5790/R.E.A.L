@@ -49,19 +49,19 @@ function openCharacter(character, options = {}) {
         "nexSelect", "pePerTurn", "nexExplanation", "ritualDifficulty", "resourceMessage",
         ...["vida", "esforco", "sanidade", "determinacao"].flatMap((id) => [`${id}Value`, `${id}Maximum`, `${id}Current`, `${id}Progress`, `${id}Bonus`, `${id}Decrease`, `${id}Increase`]),
         "chooseResourceSystem", "resourceSystemName", "effortLimitLabel", "esforcoResource", "sanidadeResource", "determinacaoResource", "determinacaoMaxInput", "determinacaoTurnInput", "resourceSystemDialog", "useEffortSanity", "useDetermination", "cancelResourceSystem",
-        "automaticEffects", "automaticEffectsSummary", "freeRollForm", "freeRollExpression",
+        "automaticEffects", "automaticEffectsSummary", "freeRollForm", "freeRollExpression", "progressionTitle", "progressionNex", "progressionSummary", "trailField", "trailSelect", "trailMessage", "trailTimeline", "classPowerProgress", "attributeIncreaseProgress", "trainingProgress", "versatilityField", "versatilitySelect", "choiceProgressionMessage", "ritualProgressionSummary",
         "characterOrigin", "characterClass", "characterPlayer", "characterCampaign",
         "editCharacter", "characterAppearance", "characterPersonality",
         "characterHistory", "characterObjective", "attributeWheelImage",
-        "attributeWheelValues", "toggleAttributeEdit", "attributeEditHint", "storageNote", "noteWorkspace", "noteCanvas",
-        "skillsBody", "skillRollResult", "originTrainingSummary", "originTrainingChoices",
+        "attributeWheelValues", "toggleAttributeEdit", "attributeEditHint", "storageNote", "noteWorkspace", "noteCanvas", "noteCanvasScroll", "noteConnectionLayer", "noteConnectionList", "noteMapStatus", "connectNotes", "undoNoteConnection", "noteColor", "noteKind", "noteRelation", "duplicateNote", "organizeNoteMap", "exportNoteMap", "importNoteMap", "importNoteMapFile", "noteSearch", "noteZoomOut", "noteZoomValue", "noteZoomIn", "fitNoteMap", "clearNoteMap",
+        "skillsBody", "skillRollResult", "skillProgressionSummary", "originTrainingSummary", "originTrainingChoices",
         "originSkillChoice1", "originSkillChoice2", "originTrainingMessage",
         "toggleNotesFullscreen", "entryDialog", "entryDialogTitle", "entryCategoryField",
         "entryCategory", "entryForm", "entryName", "entryDescription", "cancelEntry", "entrySubmit",
         "openCatalog", "catalogDialog", "catalogDialogTitle", "catalogCollections", "catalogCategories", "catalogGroupTitle", "catalogList", "closeCatalog",
         "openAbilityCatalog", "abilityCatalogDialog", "closeAbilityCatalog", "abilityCatalogCategories", "abilityCatalogSubgroups", "abilityCatalogSearch", "abilityCatalogGroupTitle", "abilityCatalogMessage", "abilityCatalogList",
         "openRitualCatalog", "ritualCatalogDialog", "closeRitualCatalog", "ritualCatalogElements", "ritualCatalogCircles", "ritualCatalogSearch", "ritualCatalogGroupTitle", "ritualCatalogMessage", "ritualCatalogList",
-        "inventoryList", "abilitiesList", "ritualsList", "equippedWeapon",
+        "inventoryList", "abilitiesList", "ritualsList", "equippedWeapon", "prestigeInput", "patentSelect", "creditLimit", "inventoryLoad", "inventoryCategory1", "inventoryCategory2", "inventoryCategory3", "inventoryCategory4", "categoryBonus1", "categoryBonus2", "categoryBonus3", "categoryBonus4", "loadBonus", "inventoryLimitMessage",
         "defenseValue", "blockValue", "dodgeValue", "protectionValue", "resistanceValue", "proficiencyValue", "defenseExplanation",
         "defenseBonus", "blockBonus", "dodgeBonus", "resistanceNotes", "proficiencyNotes", "equipmentMessage",
         ...["informacoes", "descricoes", "atributos", "pericias", "combate", "inventario", "habilidades", "rituais"].map((id) => `panel-${id}`),
@@ -119,6 +119,7 @@ function openCharacter(character, options = {}) {
             title: "Ficha de personagem | R.E.A.L",
             getElementById: (id) => ids[id],
             createElement: (tag) => new Element(tag),
+            createElementNS: (_namespace, tag) => new Element(tag),
             querySelectorAll: (selector) => ({
                 "[data-sheet-tab]": sheetTabs,
                 "[data-description-tab]": descriptionTabs,
@@ -143,9 +144,12 @@ function openCharacter(character, options = {}) {
     vm.runInContext(fs.readFileSync(path.join(root, "origins.js"), "utf8"), context);
     vm.runInContext(fs.readFileSync(path.join(root, "equipment-catalog.js"), "utf8"), context);
     vm.runInContext(fs.readFileSync(path.join(root, "equipment-rules.js"), "utf8"), context);
+    vm.runInContext(fs.readFileSync(path.join(root, "inventory-rules.js"), "utf8"), context);
     vm.runInContext(fs.readFileSync(path.join(root, "ability-catalog.js"), "utf8"), context);
+    vm.runInContext(fs.readFileSync(path.join(root, "progression-rules.js"), "utf8"), context);
     vm.runInContext(fs.readFileSync(path.join(root, "ritual-catalog.js"), "utf8"), context);
     vm.runInContext(fs.readFileSync(path.join(root, "sheet-mechanics.js"), "utf8"), context);
+    vm.runInContext(fs.readFileSync(path.join(root, "mind-map-rules.js"), "utf8"), context);
     if (options.catalogCollections) context.window.REAL_EQUIPMENT_COLLECTIONS = [...context.window.REAL_EQUIPMENT_COLLECTIONS, ...options.catalogCollections];
     if (options.catalogItems) context.window.REAL_EQUIPMENT_CATALOG = [...context.window.REAL_EQUIPMENT_CATALOG, ...options.catalogItems];
     vm.runInContext(fs.readFileSync(path.join(root, "personagem.js"), "utf8"), context);
@@ -166,6 +170,10 @@ const character = {
     history: "Busca pistas do passado.",
     objective: "Encontrar a verdade."
 };
+
+function listedAbility(view, name) {
+    return view.ids.abilitiesList.children.find((row) => row.children[0]?.textContent === name);
+}
 
 const { ids, context, sheetTabs, descriptionTabs, addEntryButtons, inventoryFilters, shapeButtons, saved } = openCharacter(character);
 assert.equal(ids.missingCharacter.hidden, true);
@@ -208,16 +216,80 @@ const resourceReload = openCharacter(resourceView.saved().characters[0]);
 assert.equal(resourceReload.ids.nexSelect.value, "5");
 assert.equal(resourceReload.ids.vidaValue.textContent, "21");
 assert.equal(resourceReload.ids.vidaBonus.value, "5");
+const progressionView = openCharacter({ ...character });
+assert.equal(progressionView.ids.trailSelect.disabled, true, "a trilha ainda não é escolhida antes de NEX 10%");
+assert.equal(progressionView.ids.classPowerProgress.textContent, "0 / 0");
+assert.equal(progressionView.ids.attributeIncreaseProgress.textContent, "0 liberados");
+assert.equal(progressionView.ids.trainingProgress.textContent, "Treinado +5");
+assert.equal(progressionView.ids.versatilitySelect.disabled, true);
+assert.equal(progressionView.ids.trailSelect.children.length, 5, "especialista oferece as cinco trilhas do livro");
+assert.match(progressionView.ids.trailMessage.textContent, /NEX 10%/);
+progressionView.ids.nexSelect.value = "10";
+progressionView.ids.nexSelect.handlers.change();
+assert.equal(progressionView.ids.trailSelect.disabled, false);
+progressionView.ids.trailSelect.value = "Infiltrador";
+progressionView.ids.trailSelect.handlers.change();
+assert.equal(progressionView.saved().characters[0].sheet.progression.trail, "Infiltrador");
+assert.equal(progressionView.ids.trailTimeline.children.length, 4);
+assert.equal(progressionView.ids.trailTimeline.children[0].dataset.unlocked, "true");
+assert.equal(progressionView.ids.trailTimeline.children[1].dataset.unlocked, "false");
+assert.ok(listedAbility(progressionView, "Ataque Furtivo"), "o primeiro poder da trilha é liberado automaticamente");
+progressionView.ids.nexSelect.value = "40";
+progressionView.ids.nexSelect.handlers.change();
+assert.ok(listedAbility(progressionView, "Engenhosidade"), "habilidade posterior da classe acompanha o NEX");
+assert.ok(listedAbility(progressionView, "Gatuno"), "o segundo poder da trilha acompanha o NEX");
+assert.equal(progressionView.ids.trailTimeline.children[1].dataset.unlocked, "true");
+assert.equal(progressionView.ids.classPowerProgress.textContent, "0 / 2");
+assert.equal(progressionView.ids.attributeIncreaseProgress.textContent, "1 liberado");
+assert.equal(progressionView.ids.trainingProgress.textContent, "Veterano +10");
+progressionView.ids.nexSelect.value = "50";
+progressionView.ids.nexSelect.handlers.change();
+assert.equal(progressionView.ids.versatilitySelect.disabled, false);
+progressionView.ids.versatilitySelect.value = "power";
+progressionView.ids.versatilitySelect.handlers.change();
+assert.equal(progressionView.ids.classPowerProgress.textContent, "0 / 4", "Versatilidade pode abrir uma escolha adicional de poder");
+assert.equal(progressionView.saved().characters[0].sheet.progression.versatility, "power");
 const cultistResources = openCharacter({ ...character, class: "ocultista", role: "Ocultista", origin: "cultista-arrependido", originName: "Cultista Arrependido" });
 assert.equal(cultistResources.ids.sanidadeMaximum.textContent, "10", "Cultista Arrependido perde metade da Sanidade inicial");
+assert.match(cultistResources.ids.ritualProgressionSummary.textContent, /1º círculo.*3 aprendizado/);
 cultistResources.ids.nexSelect.value = "10";
 cultistResources.ids.nexSelect.handlers.change();
 assert.equal(cultistResources.ids.sanidadeMaximum.textContent, "15", "avanços posteriores concedem Sanidade integral");
+const learnedRitualView = openCharacter({ ...character, nex: 45, sheet: { habilidades: [{ id: "ritual-power", name: "Aprender Ritual" }], rituais: [{ id: "ritual", name: "Ritual de teste" }] } });
+assert.match(learnedRitualView.ids.ritualProgressionSummary.textContent, /2º círculo.*1 ritual/);
 const mundaneResources = openCharacter({ ...character, class: "mundano", role: "Mundano" });
 assert.equal(mundaneResources.ids.nexSelect.value, "0");
 assert.equal(mundaneResources.ids.vidaMaximum.textContent, "9");
 assert.equal(mundaneResources.ids.esforcoMaximum.textContent, "1");
 assert.equal(mundaneResources.ids.sanidadeMaximum.textContent, "8");
+const inventoryLimitsView = openCharacter({
+    ...character,
+    sheet: { inventario: [
+        { id: "a", name: "Item A", category: "geral", itemCategory: 1, space: 2 },
+        { id: "b", name: "Item B", category: "geral", itemCategory: 1, space: 2 },
+        { id: "c", name: "Item C", category: "geral", itemCategory: 1, space: 2 }
+    ] }
+});
+assert.equal(inventoryLimitsView.ids.patentSelect.children.length, 5);
+assert.equal(inventoryLimitsView.ids.patentSelect.value, "recruta");
+assert.equal(inventoryLimitsView.ids.creditLimit.textContent, "Baixo");
+assert.equal(inventoryLimitsView.ids.inventoryCategory1.textContent, "3 / 2");
+assert.equal(inventoryLimitsView.ids.inventoryCategory1.dataset.exceeded, "true");
+assert.equal(inventoryLimitsView.ids.inventoryLoad.textContent, "6 / 5 espaços");
+assert.match(inventoryLimitsView.ids.inventoryLimitMessage.textContent, /Categoria I excedida.*Sobrecarga/);
+inventoryLimitsView.ids.prestigeInput.value = "20";
+inventoryLimitsView.ids.prestigeInput.handlers.change();
+assert.equal(inventoryLimitsView.ids.patentSelect.value, "operador");
+assert.equal(inventoryLimitsView.ids.creditLimit.textContent, "Médio");
+assert.equal(inventoryLimitsView.ids.inventoryCategory1.textContent, "3 / 3");
+inventoryLimitsView.ids.patentSelect.value = "agente-especial";
+inventoryLimitsView.ids.patentSelect.handlers.change();
+assert.equal(inventoryLimitsView.ids.prestigeInput.value, "50");
+assert.equal(inventoryLimitsView.saved().characters[0].sheet.inventoryRules.prestige, 50);
+inventoryLimitsView.ids.loadBonus.value = "2";
+inventoryLimitsView.ids.loadBonus.handlers.change();
+assert.equal(inventoryLimitsView.ids.inventoryLoad.textContent, "6 / 7 espaços");
+assert.match(inventoryLimitsView.ids.inventoryLimitMessage.textContent, /Inventário dentro dos limites/);
 for (const page of ["index.html", "ficha.html", "personagem.html"]) {
     const html = fs.readFileSync(path.join(root, page), "utf8");
     assert.match(html, /<strong>R\.E\.A\.L<\/strong><small>RPG entre amigos loucos<\/small>/);
@@ -290,7 +362,8 @@ assert.equal(attributeReload.ids.attributeWheelValues.children[4].children[0].te
 assert.equal(ids.characterHistory.textContent, "Busca pistas do passado.");
 assert.equal(ids.characterObjective.textContent, "Encontrar a verdade.");
 assert.match(ids.equippedWeapon.children[0].textContent, /Nenhuma arma equipada/);
-assert.equal(ids.abilitiesList.children.length, 1, "a habilidade da origem aparece mesmo sem habilidades manuais");
+assert.equal(ids.abilitiesList.children.length, 3, "origem e habilidades iniciais da classe aparecem sem cadastro manual");
+assert.deepEqual(ids.abilitiesList.children.map((row) => row.children[0].textContent), ["Vislumbres do Passado", "Eclético", "Perito"]);
 const originAbilityRow = ids.abilitiesList.children[0];
 const originToggle = originAbilityRow.children[0];
 const originDetails = originAbilityRow.children[1];
@@ -354,8 +427,43 @@ note.children[0].handlers.keydown({ key: "ArrowRight", shiftKey: false, preventD
 assert.equal(note.style.left, "45px");
 shapeButtons[2].click();
 assert.equal(ids.noteCanvas.children[1].dataset.shape, "triangle");
+const secondNote = ids.noteCanvas.children[1];
+note.children[3].click();
+assert.equal(ids.connectNotes.getAttribute("aria-pressed"), "true");
+assert.equal(note.dataset.connectionSource, "true");
+secondNote.children[3].click();
+assert.equal(ids.noteConnectionLayer.children.length, 1, "duas ideias podem ser ligadas");
+assert.equal(ids.noteConnectionList.children.length, 1);
+assert.equal(ids.undoNoteConnection.disabled, false);
+assert.equal(ids.noteConnectionLayer.children[0].children[1].textContent, "Relacionada");
+const relationSelect = ids.noteConnectionList.children[0].children[1];
+relationSelect.value = "contradicts";
+relationSelect.handlers.change();
+assert.equal(ids.noteConnectionLayer.children[0].getAttribute("data-relation"), "contradicts");
+assert.equal(ids.noteConnectionLayer.children[0].children[1].textContent, "Contradiz");
+ids.undoNoteConnection.click();
+assert.equal(ids.noteConnectionLayer.children.length, 0, "a última ligação pode ser desfeita");
+note.children[3].click();
+secondNote.children[3].click();
+ids.noteColor.value = "red";
+ids.noteColor.handlers.change();
+assert.equal(secondNote.dataset.color, "red", "a ideia selecionada pode receber outra cor");
+ids.noteKind.value = "clue";
+ids.noteKind.handlers.change();
+assert.equal(secondNote.dataset.kind, "clue");
+assert.equal(secondNote.children[4].textContent, "Pista");
+ids.noteSearch.value = "culto";
+ids.noteSearch.handlers.input();
+assert.equal(note.dataset.searchHidden, "false");
+assert.equal(secondNote.dataset.searchHidden, "true");
+ids.noteSearch.value = "";
+ids.noteSearch.handlers.input();
+ids.noteZoomOut.click();
+assert.equal(ids.noteZoomValue.textContent, "90%");
+assert.equal(saved().characters[0].sheet.mindMapView.zoom, 0.9);
 assert.equal(saved().characters[0].sheet.notes[0].text, "Ligação com o culto");
 assert.equal(saved().characters[0].sheet.notes[0].x, 45);
+assert.equal(saved().characters[0].sheet.noteConnections.length, 1);
 ids.toggleNotesFullscreen.click();
 assert.equal(ids.noteWorkspace.classList.contains("is-expanded"), true);
 
@@ -774,10 +882,10 @@ ids.entryDescription.value = "Uma habilidade anotada pelo jogador.";
 ids.entryForm.handlers.submit({ preventDefault() {} });
 assert.equal(ids.entryDialog.open, false);
 assert.equal(saved().characters[0].sheet.habilidades[0].name, "Instinto de sobrevivência");
-assert.equal(ids.abilitiesList.children.length, 2, "habilidade manual aparece junto da habilidade de origem");
-assert.equal(ids.abilitiesList.children[1].children[0].textContent, "Instinto de sobrevivência");
+assert.equal(ids.abilitiesList.children.length, 4, "habilidade manual aparece junto da progressão automática");
+assert.ok(listedAbility({ ids }, "Instinto de sobrevivência"));
 const refreshedOrigin = ids.abilitiesList.children[0];
-const manualAbility = ids.abilitiesList.children[1];
+const manualAbility = listedAbility({ ids }, "Instinto de sobrevivência");
 refreshedOrigin.children[0].click();
 manualAbility.children[0].click();
 assert.equal(refreshedOrigin.children[1].hidden, true, "abrir outra habilidade fecha a anterior");
@@ -857,7 +965,11 @@ assert.equal(ritualRow.children[1].children[2].textContent, "Remover ritual");
 assert.equal(saved().characters[0].attributes.agilidade, 4, "novos dados não alteram os atributos existentes");
 const reloaded = openCharacter(saved().characters[0]);
 assert.equal(reloaded.ids.noteCanvas.children.length, 2, "mapa mental é recuperado");
-assert.equal(reloaded.ids.abilitiesList.children.length, 2, "habilidade de origem e manual reaparecem sem duplicação");
+assert.equal(reloaded.ids.noteConnectionLayer.children.length, 1, "ligações do mapa mental são recuperadas");
+assert.equal(reloaded.ids.noteCanvas.children[1].dataset.color, "red", "cores das ideias são recuperadas");
+assert.equal(reloaded.ids.noteCanvas.children[1].dataset.kind, "clue", "tipos de ideia são recuperados");
+assert.equal(reloaded.ids.noteZoomValue.textContent, "90%", "zoom do mapa é recuperado");
+assert.equal(reloaded.ids.abilitiesList.children.length, 4, "origem, classe e habilidade manual reaparecem sem duplicação");
 assert.equal(reloaded.saved().characters[0].sheet.habilidades.length, 1, "a habilidade automática não é gravada como habilidade manual");
 assert.equal(reloaded.ids.equippedWeapon.children[0].textContent, "Pistola", "arma equipada reaparece ao recarregar a ficha");
 const unequipView = openCharacter(reloaded.saved().characters[0]);
@@ -908,12 +1020,13 @@ for (const [originId, originName, ability, description] of [
     assert.equal(originRow.children[1].children.some((child) => child.tag === "button"), false);
 }
 const changedAbilityOrigin = openCharacter({ ...reloaded.saved().characters[0], origin: "criminoso", originName: "Criminoso" });
-assert.equal(changedAbilityOrigin.ids.abilitiesList.children.length, 2);
+assert.equal(changedAbilityOrigin.ids.abilitiesList.children.length, 4);
 assert.equal(changedAbilityOrigin.ids.abilitiesList.children[0].children[0].textContent, "O Crime Compensa", "trocar a origem troca a habilidade automática");
-assert.equal(changedAbilityOrigin.ids.abilitiesList.children[1].children[0].textContent, "Instinto de sobrevivência", "habilidade manual é preservada");
-changedAbilityOrigin.ids.abilitiesList.children[1].children[1].children[2].click();
+const preservedManualAbility = listedAbility(changedAbilityOrigin, "Instinto de sobrevivência");
+assert.ok(preservedManualAbility, "habilidade manual é preservada");
+preservedManualAbility.children[1].children[2].click();
 assert.equal(changedAbilityOrigin.saved().characters[0].sheet.habilidades.length, 0, "remover habilidade manual não altera a origem");
-assert.equal(changedAbilityOrigin.ids.abilitiesList.children.length, 1);
+assert.equal(changedAbilityOrigin.ids.abilitiesList.children.length, 3);
 assert.equal(changedAbilityOrigin.ids.abilitiesList.children[0].children[0].textContent, "O Crime Compensa");
 const manualDuplicate = openCharacter({
     ...character,
@@ -921,7 +1034,7 @@ const manualDuplicate = openCharacter({
     originName: "Criminoso",
     sheet: { habilidades: [{ id: "antiga", name: "O Crime Compensa", description: "Ao fim de uma missão, escolha um item encontrado. Na próxima missão, ele pode entrar no inventário sem contar no limite de itens por patente." }] }
 });
-assert.equal(manualDuplicate.ids.abilitiesList.children.length, 1, "uma cópia manual idêntica não duplica a habilidade na tela");
+assert.equal(manualDuplicate.ids.abilitiesList.children.length, 3, "uma cópia manual idêntica não duplica a habilidade na tela");
 assert.equal(manualDuplicate.saved().characters[0].sheet.habilidades.length, 1, "a cópia manual antiga não é apagada do armazenamento");
 
 const skillView = openCharacter({
@@ -945,6 +1058,8 @@ const lutaOther = luta.children[4].children[0];
 assert.equal(lutaAttribute.value, "forca");
 assert.equal(luta.children[1].children[0].children[1].textContent, "3d20");
 assert.deepEqual(lutaTraining.children.map((option) => option.value), ["0", "5", "10", "15"]);
+assert.equal(lutaTraining.children[2].disabled, true, "veterano fica bloqueado antes de NEX 35%");
+assert.equal(lutaTraining.children[3].disabled, true, "expert fica bloqueado antes de NEX 70%");
 assert.equal(lutaOther.min, "-1000");
 assert.equal(lutaOther.max, "1000");
 lutaRoll.click();
@@ -1053,7 +1168,15 @@ assert.equal(criminal.saved().characters[0].sheet.skills.crime.training, 0, "o t
 const crimeTraining = criminal.ids.skillsBody.children[6].children[3].children[0];
 crimeTraining.value = "10";
 crimeTraining.handlers.change();
-assert.equal(criminal.ids.skillsBody.children[6].children[2].children[0].textContent, "+10", "treino manual superior prevalece");
+assert.equal(criminal.ids.skillsBody.children[6].children[2].children[0].textContent, "+5", "veterano não pode ser escolhido antes de NEX 35%");
+assert.match(criminal.ids.skillProgressionSummary.textContent, /máximo neste NEX é \+5/);
+criminal.ids.nexSelect.value = "35";
+criminal.ids.nexSelect.handlers.change();
+const veteranCrimeTraining = criminal.ids.skillsBody.children[6].children[3].children[0];
+assert.notEqual(veteranCrimeTraining.children[2].disabled, true);
+veteranCrimeTraining.value = "10";
+veteranCrimeTraining.handlers.change();
+assert.equal(criminal.ids.skillsBody.children[6].children[2].children[0].textContent, "+10", "veterano é liberado em NEX 35%");
 const changedOrigin = openCharacter({ ...criminal.saved().characters[0], origin: "cultista-arrependido", originName: "Cultista Arrependido" });
 assert.equal(changedOrigin.ids.skillsBody.children[6].children[2].children[0].textContent, "+10", "treino manual permanece após mudar a origem");
 assert.equal(changedOrigin.ids.skillsBody.children[10].children[2].children[0].textContent, "0", "bônus da origem anterior não fica preso na ficha");
@@ -1126,6 +1249,10 @@ assert.deepEqual([...html.matchAll(/data-sheet-tab="([^"]+)"/g)].map((match) => 
 assert.match(html, /id="sheetTabs" class="sheet-tabs"/);
 assert.match(html, /data-description-tab="anotacoes"/);
 assert.match(html, /data-add-shape="triangle"/);
+assert.match(html, /id="connectNotes"/);
+assert.match(html, /id="noteConnectionLayer"/);
+assert.match(html, /id="noteSearch"/);
+assert.match(html, /id="exportNoteMap"/);
 assert.match(html, /<tbody id="skillsBody"><\/tbody>/);
 assert.match(html, /id="equippedWeapon" aria-live="polite"/);
 assert.match(html, /id="nexSelect"/);
@@ -1347,7 +1474,7 @@ assert.match(addedBlood.description, /Afinidade:.*Fortitude/);
 assert.match(addedBlood.description, /<script>texto literal<\/script>/);
 assert.equal(Number(abilityView.ids.vidaMaximum.textContent), Number(previousMaximum) + 2, "Sangue de Ferro acrescenta dois PV por nível com automações ligadas");
 const abilityReload = openCharacter(abilityView.saved().characters[0]);
-assert.equal(abilityReload.ids.abilitiesList.children.length, 3, "origem automática, habilidade antiga e habilidade do catálogo permanecem");
+assert.equal(abilityReload.ids.abilitiesList.children.length, 5, "origem, classe e habilidades manuais permanecem");
 abilityReload.ids.openAbilityCatalog.click();
 queryAbility(abilityReload, "sangue de ferro");
 assert.equal(catalogAbility(abilityReload, "Sangue de Ferro").children[1].children.at(-1).disabled, true);

@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#111113">
     <title>Ficha de personagem | R.E.A.L</title>
-    <link rel="stylesheet" href="personagem.css?v=20261002-mechanics">
+    <link rel="stylesheet" href="personagem.css?v=20261003-mind-map">
     <link rel="stylesheet" href="visitor-name.css?v=20260928-visitor">
     <script src="visitor-name.js?v=20260928-visitor"></script>
 </head>
@@ -68,16 +68,33 @@
                     <div><h3>Objetivo</h3><p id="characterObjective"></p></div>
                 </div>
                 <div id="subpanel-anotacoes" role="tabpanel" aria-labelledby="subtab-anotacoes" hidden>
-                    <p class="section-copy">Monte ideias livremente. Use a alça para mover as formas; escreva dentro delas. As anotações ficam salvas neste navegador.</p>
+                    <p class="section-copy">Monte ideias livremente, conecte pistas e organize relações. Tudo fica salvo nesta ficha e neste navegador.</p>
                     <div id="noteWorkspace" class="note-workspace">
                         <div class="note-toolbar" role="toolbar" aria-label="Ferramentas do mapa mental">
                             <button type="button" data-add-shape="square">+ Quadrado</button>
                             <button type="button" data-add-shape="rectangle">+ Retângulo</button>
                             <button type="button" data-add-shape="triangle">+ Triângulo</button>
                             <button type="button" data-add-shape="circle">+ Círculo</button>
+                            <button id="connectNotes" type="button" aria-pressed="false">Conectar ideias</button>
+                            <button id="undoNoteConnection" type="button" disabled>Desfazer ligação</button>
+                            <label class="note-toolbar__color">Cor da ideia<select id="noteColor" disabled><option value="violet">Roxo</option><option value="red">Vermelho</option><option value="blue">Azul</option><option value="green">Verde</option><option value="amber">Âmbar</option></select></label>
+                            <label class="note-toolbar__color">Tipo<select id="noteKind" disabled><option value="idea">Ideia</option><option value="person">Pessoa</option><option value="clue">Pista</option><option value="place">Local</option><option value="entity">Entidade</option><option value="ritual">Ritual</option><option value="question">Pergunta</option></select></label>
+                            <label class="note-toolbar__color">Próxima relação<select id="noteRelation"><option value="related">Relacionada</option><option value="leads">Leva a</option><option value="supports">Confirma</option><option value="contradicts">Contradiz</option><option value="threatens">Ameaça</option><option value="protects">Protege</option></select></label>
+                            <button id="duplicateNote" type="button" disabled>Duplicar ideia</button>
+                            <button id="organizeNoteMap" type="button">Organizar mapa</button>
+                            <button id="exportNoteMap" type="button">Exportar</button>
+                            <button id="importNoteMap" type="button">Importar</button>
+                            <input id="importNoteMapFile" type="file" accept="application/json,.json" hidden>
+                            <button id="clearNoteMap" class="note-toolbar__danger" type="button">Limpar mapa</button>
                             <button id="toggleNotesFullscreen" class="note-toolbar__fullscreen" type="button">Tela cheia</button>
                         </div>
-                        <div class="note-canvas-scroll"><div id="noteCanvas" class="note-canvas" aria-label="Mapa mental do personagem"></div></div>
+                        <div class="note-map-controls">
+                            <label>Buscar no mapa<input id="noteSearch" type="search" maxlength="120" placeholder="Pessoa, pista, local…"></label>
+                            <div class="note-zoom-controls" role="group" aria-label="Zoom do mapa mental"><button id="noteZoomOut" type="button" aria-label="Diminuir zoom">−</button><strong id="noteZoomValue">100%</strong><button id="noteZoomIn" type="button" aria-label="Aumentar zoom">+</button><button id="fitNoteMap" type="button">Enquadrar</button></div>
+                        </div>
+                        <p id="noteMapStatus" class="note-map-status" role="status" aria-live="polite"></p>
+                        <div id="noteCanvasScroll" class="note-canvas-scroll"><div id="noteCanvas" class="note-canvas" aria-label="Mapa mental do personagem"><svg id="noteConnectionLayer" class="note-connection-layer" aria-hidden="true"></svg></div></div>
+                        <div id="noteConnectionList" class="note-connection-list" aria-label="Ligações do mapa mental"></div>
                     </div>
                 </div>
             </section>
@@ -156,6 +173,7 @@
             <section id="panel-pericias" class="sheet-panel" role="tabpanel" aria-labelledby="tab-pericias" hidden>
                 <div class="section-heading"><span class="eyebrow">TREINAMENTO</span><h2>Perícias</h2></div>
                 <p class="section-copy">Escolha o atributo usado nos dados, defina o treino e ajuste outros bônus. Clique no D20 ao lado do nome para rolar.</p>
+                <p id="skillProgressionSummary" class="skill-progression-summary" role="status" aria-live="polite"></p>
                 <p id="originTrainingSummary" class="origin-training-summary"></p>
                 <div id="originTrainingChoices" class="origin-training-choices" hidden>
                     <p>Amnésico: escolha com o mestre duas perícias diferentes para receber +5 de treino.</p>
@@ -181,6 +199,22 @@
             </section>
             <section id="panel-inventario" class="sheet-panel" role="tabpanel" aria-labelledby="tab-inventario" hidden>
                 <div class="section-heading"><span class="eyebrow">O QUE CARREGA</span><h2>Inventário</h2></div>
+                <section class="inventory-rules" aria-labelledby="inventoryRulesTitle">
+                    <div class="inventory-rules__heading"><div><span class="eyebrow">PATENTE E CARGA</span><h3 id="inventoryRulesTitle">Limites da missão</h3></div><strong id="inventoryLoad">0 / 0 espaços</strong></div>
+                    <div class="inventory-rules__fields">
+                        <label>Pontos de prestígio<input id="prestigeInput" type="number" min="0" max="999999" step="1" inputmode="numeric"></label>
+                        <label>Patente<select id="patentSelect"></select></label>
+                        <div><span>Limite de crédito</span><strong id="creditLimit">—</strong></div>
+                    </div>
+                    <div class="inventory-category-limits" aria-label="Itens usados e permitidos por categoria">
+                        <div><span>Categoria I</span><strong id="inventoryCategory1">0 / 0</strong></div>
+                        <div><span>Categoria II</span><strong id="inventoryCategory2">0 / 0</strong></div>
+                        <div><span>Categoria III</span><strong id="inventoryCategory3">0 / 0</strong></div>
+                        <div><span>Categoria IV</span><strong id="inventoryCategory4">0 / 0</strong></div>
+                    </div>
+                    <details class="inventory-rules__adjustments"><summary>Ajustes para habilidades, itens e regras da mesa</summary><div><label>Categoria I<input id="categoryBonus1" type="number" min="0" max="99" step="1"></label><label>Categoria II<input id="categoryBonus2" type="number" min="0" max="99" step="1"></label><label>Categoria III<input id="categoryBonus3" type="number" min="0" max="99" step="1"></label><label>Categoria IV<input id="categoryBonus4" type="number" min="0" max="99" step="1"></label><label>Espaços extras<input id="loadBonus" type="number" min="-99" max="99" step="1"></label></div></details>
+                    <p id="inventoryLimitMessage" class="origin-training-message" role="status" aria-live="polite"></p>
+                </section>
                 <div class="section-actions"><p>Armas, munições, proteção, objetos gerais e itens amaldiçoados ficam organizados aqui.</p><div class="section-actions__buttons"><button type="button" class="button button--ghost" data-add-entry="inventario">Criar item</button><button id="openCatalog" type="button" class="button button--primary">Adicionar item</button></div></div>
                 <nav class="inventory-filters" aria-label="Filtrar inventário">
                     <button type="button" data-inventory-filter="todos">Todos</button>
@@ -197,6 +231,20 @@
             <section id="panel-habilidades" class="sheet-panel" role="tabpanel" aria-labelledby="tab-habilidades" hidden>
                 <div class="section-heading"><span class="eyebrow">O QUE SABE FAZER</span><h2>Habilidades</h2></div>
                 <div class="section-actions"><p>Consulte poderes, trilhas, origens e poderes paranormais do livro básico. A habilidade da origem reconhecida continua aparecendo automaticamente.</p><div class="section-actions__buttons"><button type="button" class="button button--ghost" data-add-entry="habilidades">Criar habilidade</button><button id="openAbilityCatalog" type="button" class="button button--primary">Adicionar habilidade</button></div></div>
+                <section class="progression-card" aria-labelledby="progressionTitle">
+                    <div class="progression-card__heading"><div><span class="eyebrow">PROGRESSÃO AUTOMÁTICA</span><h3 id="progressionTitle">Classe e trilha</h3></div><span id="progressionNex" class="progression-card__nex"></span></div>
+                    <p id="progressionSummary" class="progression-card__summary"></p>
+                    <label id="trailField" class="progression-card__field" for="trailSelect">Trilha<select id="trailSelect"><option value="">Escolha uma trilha</option></select></label>
+                    <p id="trailMessage" class="origin-training-message" role="status" aria-live="polite"></p>
+                    <ol id="trailTimeline" class="progression-timeline" aria-label="Marcos da trilha"></ol>
+                    <div class="progression-counters">
+                        <div><span>Poderes de classe</span><strong id="classPowerProgress">0 / 0</strong></div>
+                        <div><span>Aumentos de atributo</span><strong id="attributeIncreaseProgress">0 liberados</strong></div>
+                        <div><span>Grau de treinamento</span><strong id="trainingProgress">Treinado</strong></div>
+                    </div>
+                    <label id="versatilityField" class="progression-card__field" for="versatilitySelect">Versatilidade em NEX 50%<select id="versatilitySelect"><option value="">Ainda não definida</option><option value="power">Poder de classe adicional</option><option value="trail">Habilidade de outra trilha</option></select></label>
+                    <p id="choiceProgressionMessage" class="progression-card__summary"></p>
+                </section>
                 <label class="mechanics-toggle"><input id="automaticEffects" type="checkbox" checked> Aplicar bônus permanentes conferidos</label>
                 <p id="automaticEffectsSummary" class="pending-note"></p>
                 <p class="pending-note">Não repita nos ajustes manuais os bônus listados acima. Outros poderes, pré-requisitos, condições, custos, imunidades e efeitos continuam sob controle da mesa.</p>
@@ -205,6 +253,7 @@
             <section id="panel-rituais" class="sheet-panel" role="tabpanel" aria-labelledby="tab-rituais" hidden>
                 <div class="section-heading"><span class="eyebrow">CONHECIMENTO PARANORMAL</span><h2>Rituais</h2></div>
                 <div class="stat-grid stat-grid--single"><div><span>DT de rituais</span><strong id="ritualDifficulty">—</strong></div></div>
+                <p id="ritualProgressionSummary" class="skill-progression-summary" role="status" aria-live="polite"></p>
                 <div class="section-actions"><p>Consulte os rituais por elemento e círculo. A DT acima acompanha a Presença e o NEX da ficha.</p><div class="section-actions__buttons"><button type="button" class="button button--ghost" data-add-entry="rituais">Criar ritual</button><button id="openRitualCatalog" type="button" class="button button--primary">Adicionar ritual</button></div></div>
                 <p class="pending-note">Registrar um ritual não o conjura. Os botões disponíveis somam os dados da forma escolhida, sem gastar recursos ou aplicar dano ou cura ao alvo. Requisitos e resistências continuam sob controle da mesa.</p>
                 <div id="ritualsList" class="entry-list entry-list--accordion"></div>
@@ -267,13 +316,16 @@
         <div id="ritualCatalogList" class="catalog-list"></div>
     </dialog>
     <script src="attribute-themes.js?v=20260922-attribute-themes-final"></script>
-    <script src="nex-rules.js?v=20261002-mechanics"></script>
+    <script src="nex-rules.js?v=20261003-progression"></script>
     <script src="origins.js?v=20261002-origins"></script>
     <script src="equipment-catalog.js?v=20260930-cursed-items"></script>
     <script src="equipment-rules.js?v=20261002-mechanics"></script>
+    <script src="inventory-rules.js?v=20261003-inventory"></script>
     <script src="ability-catalog.js?v=20261002-abilities"></script>
+    <script src="progression-rules.js?v=20261003-progression"></script>
     <script src="ritual-catalog.js?v=20261002-rituals"></script>
     <script src="sheet-mechanics.js?v=20261002-mechanics"></script>
-    <script src="personagem.js?v=20261002-mechanics"></script>
+    <script src="mind-map-rules.js?v=20261003-mind-map"></script>
+    <script src="personagem.js?v=20261003-mind-map"></script>
 </body>
 </html>

@@ -8,6 +8,13 @@ assert.equal(rules.allowedNex("combatente").length, 20);
 assert.equal(rules.normalizeNex("especialista", 0), 5);
 assert.equal(rules.normalizeNex("mundano", 50), 0);
 assert.equal(rules.calculate({ classId: "desconhecida", nex: 5 }), null);
+assert.equal(rules.trainingMaximum("especialista", 5), 5);
+assert.equal(rules.trainingMaximum("especialista", 35), 10);
+assert.equal(rules.trainingMaximum("especialista", 70), 15);
+assert.equal(rules.trainingMaximum("mundano", 0), 5);
+assert.equal(rules.nextTrainingMilestone("combatente", 5), 35);
+assert.equal(rules.nextTrainingMilestone("combatente", 35), 70);
+assert.equal(rules.nextTrainingMilestone("combatente", 70), null);
 
 const attributes = { vigor: 2, presenca: 3 };
 for (const [classId, start, next] of [

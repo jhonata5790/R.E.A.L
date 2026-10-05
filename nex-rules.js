@@ -24,6 +24,19 @@
         return Number.isInteger(value) ? Math.max(-999, Math.min(999, value)) : 0;
     }
 
+    function trainingMaximum(classId, nex) {
+        if (!CLASSES[classId]) return 15;
+        if (classId === "mundano") return 5;
+        const current = normalizeNex(classId, nex) || 5;
+        return current >= 70 ? 15 : current >= 35 ? 10 : 5;
+    }
+
+    function nextTrainingMilestone(classId, nex) {
+        if (!CLASSES[classId] || classId === "mundano") return null;
+        const current = normalizeNex(classId, nex) || 5;
+        return current < 35 ? 35 : current < 70 ? 70 : null;
+    }
+
     function calculate({ classId, nex, attributes = {}, origin = "", bonuses = {}, automaticBonuses = {} }) {
         const rules = CLASSES[classId];
         if (!rules) return null;
@@ -40,7 +53,7 @@
         return { nex: normalizeNex(classId, nex), level, pePerTurn: classId === "mundano" ? 1 : level, maxima };
     }
 
-    const api = Object.freeze({ CLASSES, RESOURCES, allowedNex, normalizeNex, clampBonus, calculate });
+    const api = Object.freeze({ CLASSES, RESOURCES, allowedNex, normalizeNex, clampBonus, trainingMaximum, nextTrainingMilestone, calculate });
     (scope.window || scope).REAL_NEX_RULES = api;
     if (typeof module !== "undefined" && module.exports) module.exports = api;
 })(globalThis);

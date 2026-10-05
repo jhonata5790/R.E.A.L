@@ -4,9 +4,12 @@ const NEX_RULES = window.REAL_NEX_RULES;
 const EQUIPMENT_CATALOG = window.REAL_EQUIPMENT_CATALOG || [];
 const EQUIPMENT_COLLECTIONS = window.REAL_EQUIPMENT_COLLECTIONS || [];
 const EQUIPMENT_RULES = window.REAL_EQUIPMENT_RULES;
+const INVENTORY_RULES = window.REAL_INVENTORY_RULES;
 const ABILITY_CATALOG = window.REAL_ABILITY_CATALOG;
+const PROGRESSION_RULES = window.REAL_PROGRESSION_RULES;
 const RITUAL_CATALOG = window.REAL_RITUAL_CATALOG;
 const SHEET_MECHANICS = window.REAL_SHEET_MECHANICS;
+const MIND_MAP_RULES = window.REAL_MIND_MAP_RULES;
 const ATTRIBUTES = [
     { id: "agilidade", name: "Agilidade" },
     { id: "forca", name: "Força" },
@@ -22,6 +25,9 @@ let attributesDirty = false;
 let refreshResourcesForAttributes = () => {};
 let refreshSkillsForAttributes = () => {};
 let refreshCombatForAttributes = () => {};
+let refreshProgressionForNex = () => {};
+let refreshRitualProgression = () => {};
+let refreshInventoryLimits = () => {};
 
 function validAttribute(value) {
     return Number.isInteger(value) && value >= -100 && value <= 100;
@@ -334,6 +340,114 @@ function generalItemStatsText(item) {
     if (!Number.isInteger(item.itemCategory) || !Number.isInteger(item.space)) return "";
     return [item.element || item.itemType, `Categoria ${bookCategoryLabel(item.itemCategory)}`, `Espaços ${item.space}`].filter(Boolean).join(" · ");
 }
+
+function setupProgression() {
+    const selector = $("trailSelect");
+    const field = $("trailField");
+    const message = $("trailMessage");
+    const timeline = $("trailTimeline");
+    const classId = classTheme(character);
+    const available = PROGRESSION_RULES?.trails(ABILITY_CATALOG?.catalog, classId) || [];
+    const progression = progressionData();
+    progression.trail = PROGRESSION_RULES?.normalizeTrail(ABILITY_CATALOG?.catalog, classId, progression.trail) || "";
+    progression.versatility = ["power", "trail"].includes(progression.versatility) ? progression.versatility : "";
+
+    for (const trail of available) {
+        const option = document.createElement("option");
+        option.value = trail;
+        option.textContent = trail;
+        selector.append(option);
+    }
+
+    function render() {
+        const nex = Number.isFinite(character.nex) ? character.nex : 0;
+        const selected = PROGRESSION_RULES?.normalizeTrail(ABILITY_CATALOG?.catalog, classId, progression.trail) || "";
+        const classPowers = PROGRESSION_RULES?.classAbilities(ABILITY_CATALOG?.catalog, classId, nex) || [];
+        const trailPowers = PROGRESSION_RULES?.trailAbilities(ABILITY_CATALOG?.catalog, classId, selected, nex) || [];
+        const choices = PROGRESSION_RULES.progressionChoices(nex, progression.versatility);
+        const registeredPowers = (Array.isArray(sheetData().habilidades) ? sheetData().habilidades : []).filter((entry) => {
+            const source = ABILITY_CATALOG.catalog.find((item) => item.id === entry?.abilityCatalogId);
+            return source?.category === classId && source?.kind === "Poder de classe";
+        }).length;
+        $("progressionNex").textContent = classId === "mundano" ? "NEX 0%" : `NEX ${nex}%`;
+        selector.value = selected;
+        selector.disabled = !available.length || nex < 10;
+        field.hidden = !available.length;
+        if (!available.length) {
+            $("progressionSummary").textContent = classId === "mundano"
+                ? "Mundanos não escolhem trilha. Ao escolher uma classe, a progressão correspondente aparecerá aqui."
+                : "A classe desta ficha não foi reconhecida; a progressão automática fica desativada.";
+            message.textContent = "";
+        } else if (nex < 10) {
+            $("progressionSummary").textContent = `${classPowers.length} habilidade(s) de classe liberada(s) automaticamente.`;
+            message.textContent = "A escolha de trilha fica disponível em NEX 10%.";
+        } else if (!selected) {
+            $("progressionSummary").textContent = `${classPowers.length} habilidade(s) de classe liberada(s) automaticamente.`;
+            message.textContent = "Escolha uma trilha para liberar a habilidade de NEX 10% e acompanhar os próximos marcos.";
+        } else {
+            $("progressionSummary").textContent = `${classPowers.length} habilidade(s) de classe e ${trailPowers.length} habilidade(s) de ${selected} liberada(s) automaticamente.`;
+            const next = PROGRESSION_RULES.trailTimeline(ABILITY_CATALOG.catalog, classId, selected, nex).find((item) => !item.unlocked);
+            message.textContent = next ? `Próximo marco: ${next.name}, em NEX ${next.minNex}%.` : "Todos os marcos desta trilha foram liberados.";
+        }
+
+        timeline.replaceChildren();
+        for (const item of PROGRESSION_RULES?.trailTimeline(ABILITY_CATALOG?.catalog, classId, selected, nex) || []) {
+            const milestone = document.createElement("li");
+            milestone.dataset.unlocked = String(item.unlocked);
+            const level = document.createElement("strong");
+            level.textContent = `NEX ${item.minNex}%`;
+            const name = document.createElement("span");
+            name.textContent = item.name;
+            milestone.append(level, name);
+            timeline.append(milestone);
+        }
+        $("classPowerProgress").textContent = `${registeredPowers} / ${choices.powerSlots}`;
+        $("attributeIncreaseProgress").textContent = `${choices.attributeIncreases} ${choices.attributeIncreases === 1 ? "liberado" : "liberados"}`;
+        $("trainingProgress").textContent = NEX_RULES.trainingMaximum(classId, nex) === 15 ? "Expert +15" : NEX_RULES.trainingMaximum(classId, nex) === 10 ? "Veterano +10" : "Treinado +5";
+        $("versatilitySelect").value = progression.versatility;
+        $("versatilitySelect").disabled = !choices.versatilityAvailable;
+        $("versatilityField").hidden = !available.length;
+        const nextChoice = PROGRESSION_RULES.nextChoiceMilestone(nex);
+        const notices = [];
+        if (registeredPowers < choices.powerSlots) notices.push(`Falta registrar ${choices.powerSlots - registeredPowers} poder(es) de classe liberado(s).`);
+        if (registeredPowers > choices.powerSlots) notices.push(`${registeredPowers - choices.powerSlots} poder(es) excedem as escolhas básicas; confira fontes adicionais.`);
+        if (choices.versatilityAvailable && !progression.versatility) notices.push("Defina como Versatilidade foi usada.");
+        if (nextChoice) notices.push(`Próxima escolha: ${nextChoice.label}, em NEX ${nextChoice.nex}%.`);
+        else if (classId !== "mundano") notices.push("Todos os marcos básicos de escolha foram liberados.");
+        $("choiceProgressionMessage").textContent = notices.join(" ");
+    }
+
+    selector.addEventListener("change", () => {
+        const next = PROGRESSION_RULES.normalizeTrail(ABILITY_CATALOG.catalog, classId, selector.value);
+        const previous = progression.trail;
+        progression.trail = next;
+        if (!persistSheet()) {
+            progression.trail = previous;
+            render();
+            message.textContent = "Não foi possível salvar a trilha. Tente liberar espaço neste navegador.";
+            return;
+        }
+        render();
+        renderEntries("habilidades");
+        refreshPassiveEffects();
+        message.textContent = next ? `${next} foi definida como a trilha principal desta ficha.` : "A trilha principal foi removida.";
+    });
+    $("versatilitySelect").addEventListener("change", () => {
+        const next = ["power", "trail"].includes($("versatilitySelect").value) ? $("versatilitySelect").value : "";
+        const previous = progression.versatility;
+        progression.versatility = next;
+        if (!persistSheet()) {
+            progression.versatility = previous;
+            render();
+            return;
+        }
+        render();
+        $("trailMessage").textContent = next === "power" ? "Versatilidade reservou uma escolha adicional de poder de classe." : next === "trail" ? "Adicione manualmente pelo catálogo a habilidade de NEX 10% da outra trilha." : "Versatilidade ainda não foi definida.";
+    });
+    render();
+    return render;
+}
+
 const SKILLS = [
     { id: "acrobacia", name: "Acrobacia", attribute: "agilidade", loadPenalty: true },
     { id: "adestramento", name: "Adestramento", attribute: "presenca", trainingMark: true },
@@ -373,6 +487,162 @@ let saveTimer = null;
 function sheetData() {
     if (!character.sheet || typeof character.sheet !== "object" || Array.isArray(character.sheet)) character.sheet = {};
     return character.sheet;
+}
+
+function progressionData() {
+    const data = sheetData();
+    if (!data.progression || typeof data.progression !== "object" || Array.isArray(data.progression)) data.progression = {};
+    return data.progression;
+}
+
+function inventoryRulesData() {
+    const data = sheetData();
+    if (!data.inventoryRules || typeof data.inventoryRules !== "object" || Array.isArray(data.inventoryRules)) data.inventoryRules = {};
+    const settings = data.inventoryRules;
+    settings.prestige = INVENTORY_RULES.clampPrestige(settings.prestige);
+    if (!settings.categoryBonuses || typeof settings.categoryBonuses !== "object" || Array.isArray(settings.categoryBonuses)) settings.categoryBonuses = {};
+    for (const category of [1, 2, 3, 4]) {
+        const value = settings.categoryBonuses[category];
+        settings.categoryBonuses[category] = Number.isInteger(value) ? Math.max(0, Math.min(99, value)) : 0;
+    }
+    settings.loadBonus = Number.isInteger(settings.loadBonus) ? Math.max(-99, Math.min(99, settings.loadBonus)) : 0;
+    return settings;
+}
+
+function setupInventoryLimits() {
+    const settings = inventoryRulesData();
+    const patentSelect = $("patentSelect");
+    const prestigeInput = $("prestigeInput");
+    for (const patent of INVENTORY_RULES.PATENTS) {
+        const option = document.createElement("option");
+        option.value = patent.id;
+        option.textContent = `${patent.name} · ${patent.prestige} PP`;
+        patentSelect.append(option);
+    }
+
+    function render() {
+        const result = INVENTORY_RULES.calculate({
+            items: sheetData().inventario,
+            prestige: settings.prestige,
+            strength: character.attributes?.forca,
+            categoryBonuses: settings.categoryBonuses,
+            loadBonus: settings.loadBonus
+        });
+        prestigeInput.value = String(settings.prestige);
+        patentSelect.value = result.patent.id;
+        $("creditLimit").textContent = result.patent.credit;
+        $("inventoryLoad").textContent = `${result.used} / ${result.capacity} espaços`;
+        $("inventoryLoad").dataset.exceeded = String(result.overloaded);
+        for (const category of [1, 2, 3, 4]) {
+            const counter = $(`inventoryCategory${category}`);
+            counter.textContent = `${result.counts[category]} / ${result.limits[category]}`;
+            counter.dataset.exceeded = String(result.excess[category] > 0);
+            $(`categoryBonus${category}`).value = String(settings.categoryBonuses[category]);
+        }
+        $("loadBonus").value = String(settings.loadBonus);
+        const notices = [];
+        for (const category of [1, 2, 3, 4]) {
+            if (result.excess[category]) notices.push(`Categoria ${bookCategoryLabel(category)} excedida em ${result.excess[category]}.`);
+        }
+        if (result.immobile) notices.push("A carga passa do dobro do limite; o personagem fica imóvel até aliviar o peso.");
+        else if (result.overloaded) notices.push(`Sobrecarga de ${result.used - result.capacity} espaço(s).`);
+        if (result.unknownCategory || result.unknownSpace) {
+            const details = [];
+            if (result.unknownCategory) details.push(`${result.unknownCategory} sem categoria`);
+            if (result.unknownSpace) details.push(`${result.unknownSpace} sem espaços`);
+            notices.push(`Há ${details.join(" e ")} no inventário; complete esses dados pelo catálogo ou use os ajustes.`);
+        }
+        $("inventoryLimitMessage").textContent = notices.length ? notices.join(" ") : `Inventário dentro dos limites de ${result.patent.name}.`;
+        return result;
+    }
+
+    prestigeInput.addEventListener("change", () => {
+        const raw = prestigeInput.value.trim();
+        if (!/^\d+$/.test(raw)) { render(); return; }
+        const previous = settings.prestige;
+        settings.prestige = INVENTORY_RULES.clampPrestige(Number(raw));
+        if (!persistSheet()) settings.prestige = previous;
+        render();
+    });
+    patentSelect.addEventListener("change", () => {
+        const previous = settings.prestige;
+        settings.prestige = INVENTORY_RULES.patent(patentSelect.value).prestige;
+        if (!persistSheet()) settings.prestige = previous;
+        render();
+    });
+    for (const category of [1, 2, 3, 4]) {
+        $(`categoryBonus${category}`).addEventListener("change", () => {
+            const input = $(`categoryBonus${category}`);
+            const raw = input.value.trim();
+            const previous = settings.categoryBonuses[category];
+            settings.categoryBonuses[category] = /^\d+$/.test(raw) ? Math.max(0, Math.min(99, Number(raw))) : previous;
+            if (!persistSheet()) settings.categoryBonuses[category] = previous;
+            render();
+        });
+    }
+    $("loadBonus").addEventListener("change", () => {
+        const raw = $("loadBonus").value.trim();
+        const previous = settings.loadBonus;
+        settings.loadBonus = /^[-+]?\d+$/.test(raw) ? Math.max(-99, Math.min(99, Number(raw))) : previous;
+        if (!persistSheet()) settings.loadBonus = previous;
+        render();
+    });
+    render();
+    return render;
+}
+
+function automaticProgressionAbilities() {
+    if (!PROGRESSION_RULES || !ABILITY_CATALOG) return [];
+    const classId = classTheme(character);
+    const progression = progressionData();
+    return PROGRESSION_RULES.automaticAbilities({
+        catalog: ABILITY_CATALOG.catalog,
+        classId,
+        trail: progression.trail,
+        nex: Number.isFinite(character.nex) ? character.nex : NEX_RULES.normalizeNex(classId, character.nex) || 0
+    }).map((item) => ({
+        ...item,
+        abilityCatalogId: item.id,
+        abilityKind: item.kind,
+        automaticSource: item.progressionSource,
+        category: item.category,
+        description: item.description
+    }));
+}
+
+function automaticAbilityEntries() {
+    const entries = [];
+    if (characterOrigin?.ability) entries.push({
+        name: characterOrigin.ability,
+        description: characterOrigin.effect,
+        automaticSource: "origin",
+        automaticLabel: `Habilidade de origem · ${characterOrigin.name}`
+    });
+    entries.push(...automaticProgressionAbilities());
+    return entries;
+}
+
+function setupRitualProgression() {
+    function render() {
+        const classId = classTheme(character);
+        const nex = Number.isFinite(character.nex) ? character.nex : 0;
+        const rituals = Array.isArray(sheetData().rituais) ? sheetData().rituais.length : 0;
+        const learnedChoices = (Array.isArray(sheetData().habilidades) ? sheetData().habilidades : []).filter((entry) => {
+            const source = ABILITY_CATALOG.catalog.find((item) => item.id === entry?.abilityCatalogId);
+            return source?.name === "Aprender Ritual" || ABILITY_CATALOG.normalize(entry?.name) === ABILITY_CATALOG.normalize("Aprender Ritual");
+        }).length;
+        const circle = PROGRESSION_RULES.ritualCircle(classId, nex, learnedChoices);
+        if (classId === "ocultista") {
+            const expected = PROGRESSION_RULES.occultistRitualsKnown(nex);
+            $("ritualProgressionSummary").textContent = `Progressão básica de Ocultista: acesso até o ${circle}º círculo · ${rituals} ritual(is) registrado(s) · ${expected} aprendizado(s) de classe até este NEX. Extras de trilha e poderes são contados separadamente.`;
+        } else if (learnedChoices) {
+            $("ritualProgressionSummary").textContent = `Aprender Ritual registrado ${learnedChoices} vez(es): acesso até o ${circle}º círculo neste NEX · ${rituals} ritual(is) na ficha. Confira o limite por Intelecto e outras fontes com o mestre.`;
+        } else {
+            $("ritualProgressionSummary").textContent = `${rituals} ritual(is) registrado(s). Esta classe não recebe círculos automaticamente; Aprender Ritual ou outra fonte deve justificar o acesso.`;
+        }
+    }
+    render();
+    return render;
 }
 
 function persistSheet() {
@@ -527,6 +797,10 @@ function setupNexResources() {
         character.nex = next;
         recalculate();
         save(`NEX atualizado para ${next}%. Os máximos foram recalculados sem apagar o dano já sofrido.`);
+        refreshProgressionForNex();
+        renderEntries("habilidades");
+        refreshRitualProgression();
+        refreshPassiveEffects();
     });
     for (const id of resourceIds) {
         const name = { vida: "Vida", esforco: "Esforço", sanidade: "Sanidade", determinacao: "Determinação" }[id];
@@ -605,7 +879,7 @@ function passiveEffects() {
     const classId = classTheme(character);
     const allowed = NEX_RULES.allowedNex(classId);
     const level = classId === "mundano" || !allowed.length ? 0 : allowed.indexOf(NEX_RULES.normalizeNex(classId, character.nex)) + 1;
-    return SHEET_MECHANICS.effects({ entries: Array.isArray(sheetData().habilidades) ? sheetData().habilidades : [],
+    return SHEET_MECHANICS.effects({ entries: [...(Array.isArray(sheetData().habilidades) ? sheetData().habilidades : []), ...automaticProgressionAbilities()],
         catalog: ABILITY_CATALOG.catalog, originAbility: characterOrigin?.ability, level,
         enabled: sheetData().automaticEffects !== false });
 }
@@ -866,12 +1140,12 @@ function renderEntries(kind, expandedId = null) {
     const items = Array.isArray(sheetData()[kind]) ? sheetData()[kind].filter((item) => item && typeof item.name === "string") : [];
     const visible = kind === "inventario" && inventoryFilter !== "todos"
         ? items.filter((item) => item.category === inventoryFilter) : items;
-    // A habilidade da origem é derivada da origem salva: não entra no array editável
-    // e acompanha uma eventual troca de origem sem deixar cópias antigas.
-    const originAbility = kind === "habilidades" && characterOrigin?.ability
-        ? { name: characterOrigin.ability, description: characterOrigin.effect } : null;
-    const displayItems = originAbility
-        ? [originAbility, ...visible.filter((item) => item.name.trim().toLocaleLowerCase("pt-BR") !== originAbility.name.toLocaleLowerCase("pt-BR") || (typeof item.description === "string" ? item.description.trim() : "") !== originAbility.description)]
+    // Origem, classe e trilha são derivadas da ficha e não entram no array editável.
+    // Cópias manuais antigas continuam salvas, mas deixam de aparecer em duplicidade.
+    const automatic = kind === "habilidades" ? automaticAbilityEntries() : [];
+    const automaticNames = new Set(automatic.map((entry) => ABILITY_CATALOG.normalize(entry.name)));
+    const displayItems = kind === "habilidades"
+        ? [...automatic, ...visible.filter((item) => !automaticNames.has(ABILITY_CATALOG.normalize(item.name)))]
         : visible;
     if (!displayItems.length) {
         const empty = document.createElement("p");
@@ -883,9 +1157,9 @@ function renderEntries(kind, expandedId = null) {
     let openToggle = null;
     let openPanel = null;
     displayItems.forEach((entry, index) => {
-        const fromOrigin = entry === originAbility;
+        const fromProgression = Boolean(entry.automaticSource);
         const row = document.createElement("article");
-        row.className = fromOrigin ? "entry-list__origin entry-item" : "entry-item";
+        row.className = fromProgression ? "entry-list__origin entry-item" : "entry-item";
         const toggle = document.createElement("button");
         const panel = document.createElement("div");
         const panelId = `entry-details-${kind}-${index}`;
@@ -913,7 +1187,11 @@ function renderEntries(kind, expandedId = null) {
             openPanel = wasOpen ? null : panel;
         });
         const category = document.createElement("span");
-        category.textContent = fromOrigin ? `Habilidade de origem · ${characterOrigin.name}` : kind === "inventario" ? `${INVENTORY_CATEGORIES[entry.category] || "Geral"}${entry.group ? ` · ${entry.group}` : ""}` : kind === "habilidades" ? entry.abilityCatalogId && ABILITY_CATALOG ? ABILITY_CATALOG.classification({ ...entry, kind: entry.abilityKind }) : "Habilidade criada" : entry.ritualCatalogId && RITUAL_CATALOG ? RITUAL_CATALOG.classification(entry) : "Ritual";
+        category.textContent = entry.automaticLabel || (fromProgression && entry.automaticSource === "class"
+            ? `Habilidade de classe · ${THEMES[entry.category]?.label?.replace("Classe: ", "") || entry.category} · NEX ${entry.minNex}%`
+            : fromProgression && entry.automaticSource === "trail"
+                ? `Habilidade de trilha · ${entry.subgroup} · NEX ${entry.minNex}%`
+                : kind === "inventario" ? `${INVENTORY_CATEGORIES[entry.category] || "Geral"}${entry.group ? ` · ${entry.group}` : ""}` : kind === "habilidades" ? entry.abilityCatalogId && ABILITY_CATALOG ? ABILITY_CATALOG.classification({ ...entry, kind: entry.abilityKind }) : "Habilidade criada" : entry.ritualCatalogId && RITUAL_CATALOG ? RITUAL_CATALOG.classification(entry) : "Ritual");
         panel.append(category);
         if (kind === "rituais" && entry.ritualCatalogId) {
             const parameters = document.createElement("p"); parameters.className = "entry-item__catalog-stats";
@@ -980,7 +1258,7 @@ function renderEntries(kind, expandedId = null) {
                 renderDefenses();
             });
         }
-        if (!fromOrigin) {
+        if (!fromProgression) {
             const remove = document.createElement("button");
             remove.type = "button";
             remove.className = "entry-item__remove";
@@ -996,8 +1274,9 @@ function renderEntries(kind, expandedId = null) {
                 if (slot && entry.id && data[slot] === entry.id) data[slot] = null;
                 if (persistSheet()) {
                     renderEntries(kind);
-                    if (kind === "inventario") { renderEquippedWeapon(); setupSkills(); renderDefenses(); }
-                    if (kind === "habilidades") { refreshPassiveEffects(); persistSheet(); }
+                    if (kind === "inventario") { renderEquippedWeapon(); setupSkills(); renderDefenses(); refreshInventoryLimits(); }
+                    if (kind === "habilidades") { refreshProgressionForNex(); refreshPassiveEffects(); refreshRitualProgression(); persistSheet(); }
+                    if (kind === "rituais") refreshRitualProgression();
                 } else {
                     data[kind] = previousItems;
                     if (slot) data[slot] = previousEquipped;
@@ -1066,6 +1345,7 @@ function setupSheetEntries() {
         if (inventoryFilter !== "todos") inventoryFilter = category;
         updateInventoryFilters();
         renderEntries("inventario", entry.id);
+        refreshInventoryLimits();
     }
     function renderCatalog(selectedGroup = null, selectedCategory = "armas") {
         const collections = $("catalogCollections");
@@ -1253,6 +1533,9 @@ function setupSheetEntries() {
         if (persistSheet()) {
             dialog.close();
             renderEntries(entryKind);
+            if (entryKind === "inventario") refreshInventoryLimits();
+            if (entryKind === "habilidades") refreshProgressionForNex();
+            if (entryKind === "habilidades" || entryKind === "rituais") refreshRitualProgression();
         }
     });
     document.querySelectorAll("[data-inventory-filter]").forEach((button) => {
@@ -1274,7 +1557,7 @@ function setupAbilityCatalog() {
     const catalog = ABILITY_CATALOG?.catalog || [];
     const categories = ABILITY_CATALOG?.categories || {};
     const known = () => Array.isArray(sheetData().habilidades) ? sheetData().habilidades : [];
-    const alreadyKnown = (item) => ABILITY_CATALOG.duplicate(item, known(), characterOrigin?.ability);
+    const alreadyKnown = (item) => ABILITY_CATALOG.duplicate(item, [...known(), ...automaticProgressionAbilities()], characterOrigin?.ability);
     function render() {
         const categoryNav = $("abilityCatalogCategories");
         const subgroupNav = $("abilityCatalogSubgroups");
@@ -1358,6 +1641,8 @@ function setupAbilityCatalog() {
                 data.habilidades = [...known(), entry];
                 if (!persistSheet()) { data.habilidades = previous; message.textContent = "Não foi possível salvar. A habilidade não foi adicionada; tente liberar espaço no navegador."; return; }
                 refreshPassiveEffects(); persistSheet();
+                refreshProgressionForNex();
+                refreshRitualProgression();
                 renderEntries("habilidades", entry.id); dialog.close(); $("openAbilityCatalog").focus();
             });
             panel.append(add); row.append(toggle, panel); list.append(row);
@@ -1458,6 +1743,7 @@ function setupRitualCatalog() {
                 const entry = RITUAL_CATALOG.entry(item, crypto.randomUUID(), selectedElement, notes.value.trim());
                 data.rituais = [...known(), entry];
                 if (!persistSheet()) { data.rituais = previous; message.textContent = "Não foi possível salvar. O ritual não foi adicionado; tente liberar espaço no navegador."; return; }
+                refreshRitualProgression();
                 renderEntries("rituais", entry.id); dialog.close(); $("openRitualCatalog").focus();
             });
             panel.append(add); row.append(toggle, panel); list.append(row);
@@ -1701,6 +1987,10 @@ function rollSkill(skill, settings) {
 function setupSkills() {
     const body = $("skillsBody");
     body.replaceChildren();
+    const classId = classTheme(character);
+    const trainingMaximum = NEX_RULES.trainingMaximum(classId, character.nex);
+    const nextTrainingMilestone = NEX_RULES.nextTrainingMilestone(classId, character.nex);
+    let aboveNex = 0;
     SKILLS.forEach((skill) => {
         const settings = skillSettings(skill);
         const grantedByOrigin = originGrantsSkill(skill.id);
@@ -1782,17 +2072,23 @@ function setupSkills() {
             option.value = String(value);
             option.textContent = String(value);
             if (grantedByOrigin && value === 0) option.disabled = true;
+            if (value > trainingMaximum && value !== effectiveTraining(skill.id, settings)) option.disabled = true;
             training.append(option);
         });
         training.value = String(effectiveTraining(skill.id, settings));
+        const trainingAboveNex = effectiveTraining(skill.id, settings) > trainingMaximum;
+        row.dataset.trainingAboveNex = String(trainingAboveNex);
+        if (trainingAboveNex) aboveNex++;
         training.addEventListener("change", () => {
             const next = Number(training.value);
-            if (!TRAINING_VALUES.includes(next) || (grantedByOrigin && next < 5)) {
+            if (!TRAINING_VALUES.includes(next) || next > trainingMaximum || (grantedByOrigin && next < 5)) {
                 training.value = String(effectiveTraining(skill.id, settings));
+                $("skillProgressionSummary").textContent = `O grau máximo neste NEX é +${trainingMaximum}. ${nextTrainingMilestone ? `O próximo grau é liberado em NEX ${nextTrainingMilestone}%.` : ""}`.trim();
                 return;
             }
             settings.training = next;
             row.dataset.trained = String(effectiveTraining(skill.id, settings) > 0);
+            row.dataset.trainingAboveNex = "false";
             updateBonus(true);
             persistSheet();
         });
@@ -1824,26 +2120,375 @@ function setupSkills() {
         row.append(nameCell, dataCell, bonusCell, trainingCell, otherCell);
         body.append(row);
     });
+    const degree = trainingMaximum === 15 ? "expert" : trainingMaximum === 10 ? "veterano" : "treinado";
+    $("skillProgressionSummary").textContent = classId === "neutral"
+        ? "Classe não reconhecida: os graus de treino permanecem livres para ajuste manual."
+        : `Grau máximo no NEX atual: ${degree} (+${trainingMaximum}).${nextTrainingMilestone ? ` Próximo avanço em NEX ${nextTrainingMilestone}%.` : " Grau máximo alcançado."}${aboveNex ? ` ${aboveNex} perícia(s) antiga(s) acima deste limite foram preservadas e estão destacadas.` : ""}`;
 }
 
-const SHAPES = {
-    square: [160, 160], rectangle: [220, 150], triangle: [190, 175], circle: [170, 170]
-};
+const SHAPES = MIND_MAP_RULES.SHAPES;
+let noteBoardController = null;
 
 function setupNoteBoard() {
-    const notes = sheetData();
-    if (!Array.isArray(notes.notes)) notes.notes = [];
-    notes.notes = notes.notes.filter((note) => note && SHAPES[note.shape]);
-    notes.notes.forEach(renderNote);
+    const data = sheetData();
+    if (!Array.isArray(data.notes)) data.notes = [];
+    data.notes = data.notes.filter((note) => note && SHAPES[note.shape]);
+    data.notes.forEach((note) => {
+        if (typeof note.id !== "string" || !note.id) note.id = crypto.randomUUID();
+        note.color = MIND_MAP_RULES.COLORS.includes(note.color) ? note.color : "violet";
+        note.kind = MIND_MAP_RULES.KINDS[note.kind] ? note.kind : "idea";
+    });
+    data.noteConnections = MIND_MAP_RULES.normalizeConnections(data.noteConnections, data.notes);
+    if (!data.mindMapView || typeof data.mindMapView !== "object" || Array.isArray(data.mindMapView)) data.mindMapView = {};
+    data.mindMapView.zoom = Number.isFinite(data.mindMapView.zoom) ? Math.max(.5, Math.min(1.5, data.mindMapView.zoom)) : 1;
+    const layer = $("noteConnectionLayer");
+    const list = $("noteConnectionList");
+    const status = $("noteMapStatus");
+    const connectButton = $("connectNotes");
+    const undoButton = $("undoNoteConnection");
+    const color = $("noteColor");
+    const kind = $("noteKind");
+    const relation = $("noteRelation");
+    const duplicate = $("duplicateNote");
+    const search = $("noteSearch");
+    const canvas = $("noteCanvas");
+    const scroll = $("noteCanvasScroll");
+    const nodes = new Map();
+    let selectedId = null;
+    let pendingConnectionId = null;
+    let connecting = false;
+    let searchQuery = "";
+
+    function setStatus(message = "") {
+        status.textContent = message || `${data.notes.length} ideia(s) · ${data.noteConnections.length} ligação(ões).`;
+    }
+
+    function connectionMode(active) {
+        connecting = active;
+        if (!active) pendingConnectionId = null;
+        connectButton.setAttribute("aria-pressed", String(active));
+        connectButton.textContent = active ? "Cancelar conexão" : "Conectar ideias";
+        nodes.forEach((node, id) => { node.dataset.connectionSource = String(active && id === pendingConnectionId); });
+    }
+
+    function selectNote(id) {
+        selectedId = nodes.has(id) ? id : null;
+        nodes.forEach((node, nodeId) => { node.dataset.selected = String(nodeId === selectedId); });
+        const note = data.notes.find((item) => item.id === selectedId);
+        color.disabled = !note;
+        kind.disabled = !note;
+        duplicate.disabled = !note;
+        if (note) {
+            color.value = note.color;
+            kind.value = note.kind;
+        }
+    }
+
+    function matching(note) {
+        return MIND_MAP_RULES.matches(note, searchQuery);
+    }
+
+    function applySearch() {
+        const matches = data.notes.filter(matching).length;
+        nodes.forEach((node, id) => {
+            node.dataset.searchHidden = String(!matching(data.notes.find((note) => note.id === id)));
+        });
+        renderConnections();
+        setStatus(searchQuery ? `${matches} de ${data.notes.length} ideia(s) correspondem à busca.` : "");
+    }
+
+    function renderConnections(rebuildList = true) {
+        data.noteConnections = MIND_MAP_RULES.normalizeConnections(data.noteConnections, data.notes);
+        layer.replaceChildren();
+        if (rebuildList) list.replaceChildren();
+        for (const connection of data.noteConnections) {
+            const from = data.notes.find((note) => note.id === connection.from);
+            const to = data.notes.find((note) => note.id === connection.to);
+            const start = MIND_MAP_RULES.center(from);
+            const end = MIND_MAP_RULES.center(to);
+            const group = document.createElementNS("http://www.w3.org/2000/svg", "g");
+            group.setAttribute("class", "note-connection-group");
+            group.setAttribute("data-relation", connection.relation);
+            group.setAttribute("data-search-hidden", String(Boolean(searchQuery) && !matching(from) && !matching(to)));
+            const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+            line.setAttribute("class", "note-connection-line");
+            line.setAttribute("x1", String(start.x));
+            line.setAttribute("y1", String(start.y));
+            line.setAttribute("x2", String(end.x));
+            line.setAttribute("y2", String(end.y));
+            const lineLabel = document.createElementNS("http://www.w3.org/2000/svg", "text");
+            lineLabel.setAttribute("class", "note-connection-label");
+            lineLabel.setAttribute("x", String((start.x + end.x) / 2));
+            lineLabel.setAttribute("y", String((start.y + end.y) / 2));
+            lineLabel.textContent = MIND_MAP_RULES.RELATIONS[connection.relation];
+            group.append(line, lineLabel);
+            layer.append(group);
+
+            if (!rebuildList) continue;
+
+            const chip = document.createElement("div");
+            chip.className = "note-connection-chip";
+            const label = document.createElement("span");
+            label.textContent = `${MIND_MAP_RULES.title(from)} ↔ ${MIND_MAP_RULES.title(to)}`;
+            const relationField = document.createElement("select");
+            relationField.setAttribute("aria-label", `Relação entre ${MIND_MAP_RULES.title(from)} e ${MIND_MAP_RULES.title(to)}`);
+            for (const [value, relationLabel] of Object.entries(MIND_MAP_RULES.RELATIONS)) {
+                const option = document.createElement("option");
+                option.value = value;
+                option.textContent = relationLabel;
+                relationField.append(option);
+            }
+            relationField.value = connection.relation;
+            relationField.addEventListener("change", () => {
+                connection.relation = MIND_MAP_RULES.RELATIONS[relationField.value] ? relationField.value : "related";
+                persistSheet();
+                renderConnections();
+                setStatus("Tipo da relação atualizado.");
+            });
+            const remove = document.createElement("button");
+            remove.type = "button";
+            remove.textContent = "×";
+            remove.setAttribute("aria-label", `Remover ligação entre ${MIND_MAP_RULES.title(from)} e ${MIND_MAP_RULES.title(to)}`);
+            remove.addEventListener("click", () => {
+                data.noteConnections = data.noteConnections.filter((item) => item.id !== connection.id);
+                persistSheet();
+                renderConnections();
+                setStatus("Ligação removida.");
+            });
+            chip.append(label, relationField, remove);
+            list.append(chip);
+        }
+        if (rebuildList && !data.noteConnections.length) {
+            const empty = document.createElement("p");
+            empty.className = "note-connection-list__empty";
+            empty.textContent = "Nenhuma ligação criada ainda.";
+            list.append(empty);
+        }
+        if (rebuildList) undoButton.disabled = !data.noteConnections.length;
+        if (!status.textContent) setStatus();
+    }
+
+    function beginConnection(noteId) {
+        if (!nodes.has(noteId)) return;
+        selectNote(noteId);
+        if (!connecting || !pendingConnectionId) {
+            connecting = true;
+            pendingConnectionId = noteId;
+            connectionMode(true);
+            setStatus(`“${MIND_MAP_RULES.title(data.notes.find((note) => note.id === noteId))}” selecionada. Escolha a segunda ideia.`);
+            return;
+        }
+        if (pendingConnectionId === noteId) {
+            connectionMode(false);
+            setStatus("Conexão cancelada.");
+            return;
+        }
+        const result = MIND_MAP_RULES.addConnection(data.noteConnections, data.notes, pendingConnectionId, noteId, crypto.randomUUID(), relation.value);
+        data.noteConnections = result.connections;
+        connectionMode(false);
+        if (result.added) {
+            persistSheet();
+            renderConnections();
+            setStatus("Ideias conectadas.");
+        } else setStatus("Essas ideias já estão conectadas.");
+    }
+
+    function removeNote(noteId, node) {
+        if (!window.confirm("Remover esta ideia e todas as ligações dela?")) return;
+        const previousNotes = data.notes;
+        const previousConnections = data.noteConnections;
+        data.notes = data.notes.filter((item) => item.id !== noteId);
+        data.noteConnections = data.noteConnections.filter((item) => item.from !== noteId && item.to !== noteId);
+        if (!persistSheet()) {
+            data.notes = previousNotes;
+            data.noteConnections = previousConnections;
+            return;
+        }
+        nodes.delete(noteId);
+        node.remove();
+        if (selectedId === noteId) selectNote(null);
+        if (pendingConnectionId === noteId) connectionMode(false);
+        renderConnections();
+        setStatus("Ideia removida.");
+    }
+
+    function renderAllNotes() {
+        nodes.forEach((node) => node.remove());
+        nodes.clear();
+        data.notes.forEach(renderNote);
+        selectNote(null);
+        renderConnections();
+        applySearch();
+    }
+
+    function applyZoom(value, save = true) {
+        data.mindMapView.zoom = Math.round(Math.max(.5, Math.min(1.5, value)) * 10) / 10;
+        canvas.style.setProperty("--map-zoom", String(data.mindMapView.zoom));
+        $("noteZoomValue").textContent = `${Math.round(data.mindMapView.zoom * 100)}%`;
+        $("noteZoomOut").disabled = data.mindMapView.zoom <= .5;
+        $("noteZoomIn").disabled = data.mindMapView.zoom >= 1.5;
+        if (save) persistSheet();
+    }
+
+    noteBoardController = { nodes, selectNote, beginConnection, removeNote, renderConnections, zoom: () => data.mindMapView.zoom };
+    data.notes.forEach(renderNote);
+    renderConnections();
+    applyZoom(data.mindMapView.zoom, false);
     document.querySelectorAll("[data-add-shape]").forEach((button) => {
         button.addEventListener("click", () => {
             const shape = button.dataset.addShape;
-            const index = notes.notes.length;
-            const note = { id: crypto.randomUUID(), shape, x: 35 + (index % 4) * 200, y: 35 + Math.floor(index / 4) * 185, text: "" };
-            notes.notes.push(note);
+            const index = data.notes.length;
+            const note = { id: crypto.randomUUID(), shape, color: "violet", kind: "idea", x: 35 + (index % 5) * 245, y: 35 + Math.floor(index / 5) * 205, text: "" };
+            data.notes.push(note);
             renderNote(note);
             persistSheet();
+            selectNote(note.id);
+            setStatus("Nova ideia criada. Escreva nela e use o botão de ligação para conectá-la.");
         });
+    });
+    connectButton.addEventListener("click", () => {
+        connectionMode(!connecting);
+        setStatus(connecting ? "Modo de conexão ativo. Clique no botão de ligação de uma ideia e depois no de outra." : "Conexão cancelada.");
+    });
+    undoButton.addEventListener("click", () => {
+        if (!data.noteConnections.length) return;
+        data.noteConnections = data.noteConnections.slice(0, -1);
+        persistSheet();
+        renderConnections();
+        setStatus("Última ligação desfeita.");
+    });
+    color.addEventListener("change", () => {
+        const note = data.notes.find((item) => item.id === selectedId);
+        if (!note || !MIND_MAP_RULES.COLORS.includes(color.value)) return;
+        note.color = color.value;
+        nodes.get(note.id).dataset.color = note.color;
+        persistSheet();
+        setStatus(`Cor de “${MIND_MAP_RULES.title(note)}” atualizada.`);
+    });
+    kind.addEventListener("change", () => {
+        const note = data.notes.find((item) => item.id === selectedId);
+        if (!note || !MIND_MAP_RULES.KINDS[kind.value]) return;
+        note.kind = kind.value;
+        const node = nodes.get(note.id);
+        node.dataset.kind = note.kind;
+        node.kindLabel.textContent = MIND_MAP_RULES.KINDS[note.kind];
+        persistSheet();
+        applySearch();
+        setStatus(`“${MIND_MAP_RULES.title(note)}” classificada como ${MIND_MAP_RULES.KINDS[note.kind]}.`);
+    });
+    duplicate.addEventListener("click", () => {
+        const source = data.notes.find((item) => item.id === selectedId);
+        if (!source) return;
+        const copy = { ...source, id: crypto.randomUUID(), x: source.x + 45, y: source.y + 45, text: source.text ? `${source.text}\n(cópia)` : "Cópia" };
+        data.notes.push(copy);
+        renderNote(copy);
+        persistSheet();
+        selectNote(copy.id);
+        renderConnections();
+        setStatus("Ideia duplicada.");
+    });
+    $("organizeNoteMap").addEventListener("click", () => {
+        const positions = MIND_MAP_RULES.layout(data.notes, data.noteConnections, selectedId);
+        for (const note of data.notes) {
+            const position = positions[note.id];
+            if (!position) continue;
+            note.x = position.x;
+            note.y = position.y;
+            const node = nodes.get(note.id);
+            node.style.left = `${note.x}px`;
+            node.style.top = `${note.y}px`;
+        }
+        persistSheet();
+        renderConnections();
+        setStatus(selectedId ? "Mapa organizado a partir da ideia selecionada." : "Mapa organizado pelas conexões mais importantes.");
+    });
+    search.addEventListener("input", () => {
+        searchQuery = search.value.trim();
+        applySearch();
+    });
+    $("noteZoomOut").addEventListener("click", () => applyZoom(data.mindMapView.zoom - .1));
+    $("noteZoomIn").addEventListener("click", () => applyZoom(data.mindMapView.zoom + .1));
+    $("fitNoteMap").addEventListener("click", () => {
+        const bounds = MIND_MAP_RULES.bounds(data.notes);
+        if (!bounds.width || !bounds.height) { applyZoom(1); return; }
+        const availableWidth = Number.isFinite(scroll.clientWidth) && scroll.clientWidth > 0 ? scroll.clientWidth : 850;
+        const availableHeight = Number.isFinite(scroll.clientHeight) && scroll.clientHeight > 0 ? scroll.clientHeight : 520;
+        applyZoom(Math.min(1.5, availableWidth / bounds.width, availableHeight / bounds.height));
+        scroll.scrollTo?.({ left: bounds.x * data.mindMapView.zoom, top: bounds.y * data.mindMapView.zoom, behavior: "smooth" });
+        setStatus("Mapa enquadrado na área visível.");
+    });
+    $("exportNoteMap").addEventListener("click", () => {
+        const content = JSON.stringify({ version: 1, name: character.name, notes: data.notes, connections: data.noteConnections }, null, 2);
+        const url = URL.createObjectURL(new Blob([content], { type: "application/json" }));
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `${String(character.name || "personagem").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toLocaleLowerCase("pt-BR") || "personagem"}-mapa-mental.json`;
+        link.click();
+        window.setTimeout(() => URL.revokeObjectURL(url), 0);
+        setStatus("Cópia do mapa exportada.");
+    });
+    $("importNoteMap").addEventListener("click", () => $("importNoteMapFile").click());
+    $("importNoteMapFile").addEventListener("change", async () => {
+        const file = $("importNoteMapFile").files?.[0];
+        if (!file) return;
+        try {
+            if (Number.isFinite(file.size) && file.size > 2_000_000) throw new Error("map too large");
+            const imported = JSON.parse(await file.text());
+            if (!Array.isArray(imported.notes) || imported.notes.length > 500 || !Array.isArray(imported.connections) || imported.connections.length > 1500) throw new Error("invalid map");
+            const importedIds = new Set();
+            const importedNotes = imported.notes.filter((note) => note && SHAPES[note.shape]).map((note) => {
+                let id = typeof note.id === "string" && note.id ? note.id : crypto.randomUUID();
+                if (importedIds.has(id)) id = crypto.randomUUID();
+                importedIds.add(id);
+                return {
+                    id,
+                    shape: note.shape,
+                    color: MIND_MAP_RULES.COLORS.includes(note.color) ? note.color : "violet",
+                    kind: MIND_MAP_RULES.KINDS[note.kind] ? note.kind : "idea",
+                    x: Number.isFinite(note.x) ? Math.max(0, note.x) : 35,
+                    y: Number.isFinite(note.y) ? Math.max(0, note.y) : 35,
+                    text: String(note.text || "").slice(0, 1200)
+                };
+            });
+            if (!importedNotes.length && imported.notes.length) throw new Error("invalid notes");
+            if (!window.confirm(`Substituir o mapa atual por ${importedNotes.length} ideia(s) importada(s)?`)) return;
+            data.notes = importedNotes;
+            data.noteConnections = MIND_MAP_RULES.normalizeConnections(imported.connections, data.notes);
+            persistSheet();
+            renderAllNotes();
+            setStatus("Mapa importado com sucesso.");
+        } catch {
+            setStatus("Não foi possível importar: escolha um arquivo de mapa mental exportado pelo R.E.A.L.");
+        } finally {
+            $("importNoteMapFile").value = "";
+        }
+    });
+    let pan = null;
+    scroll.addEventListener("pointerdown", (event) => {
+        if (event.target?.closest?.(".note-node") || event.button !== 0) return;
+        pan = { x: event.clientX, y: event.clientY, left: scroll.scrollLeft, top: scroll.scrollTop };
+        scroll.dataset.panning = "true";
+        scroll.setPointerCapture?.(event.pointerId);
+    });
+    scroll.addEventListener("pointermove", (event) => {
+        if (!pan) return;
+        scroll.scrollLeft = pan.left - (event.clientX - pan.x);
+        scroll.scrollTop = pan.top - (event.clientY - pan.y);
+    });
+    const stopPan = () => { pan = null; scroll.dataset.panning = "false"; };
+    scroll.addEventListener("pointerup", stopPan);
+    scroll.addEventListener("pointercancel", stopPan);
+    $("clearNoteMap").addEventListener("click", () => {
+        if (!data.notes.length || !window.confirm("Limpar todas as ideias e ligações deste mapa mental?")) return;
+        data.notes = [];
+        data.noteConnections = [];
+        nodes.forEach((node) => node.remove());
+        nodes.clear();
+        selectNote(null);
+        connectionMode(false);
+        persistSheet();
+        renderConnections();
+        setStatus("Mapa mental limpo.");
     });
     const workspace = $("noteWorkspace");
     const fullscreen = $("toggleNotesFullscreen");
@@ -1866,6 +2511,12 @@ function renderNote(note) {
     const node = document.createElement("div");
     node.className = "note-node";
     node.dataset.shape = note.shape;
+    node.dataset.color = MIND_MAP_RULES.COLORS.includes(note.color) ? note.color : "violet";
+    node.dataset.kind = MIND_MAP_RULES.KINDS[note.kind] ? note.kind : "idea";
+    node.dataset.selected = "false";
+    node.dataset.connectionSource = "false";
+    node.setAttribute("tabindex", "0");
+    node.setAttribute("aria-label", `Ideia do mapa mental: ${MIND_MAP_RULES.title(note)}`);
     const [width, height] = SHAPES[note.shape];
     note.x = Number.isFinite(note.x) ? Math.max(0, note.x) : 35;
     note.y = Number.isFinite(note.y) ? Math.max(0, note.y) : 35;
@@ -1874,6 +2525,7 @@ function renderNote(note) {
     function position() {
         node.style.left = `${note.x}px`;
         node.style.top = `${note.y}px`;
+        noteBoardController?.renderConnections(false);
     }
     position();
     const handle = document.createElement("button");
@@ -1890,20 +2542,36 @@ function renderNote(note) {
     text.value = note.text || "";
     text.maxLength = 1200;
     text.setAttribute("aria-label", "Texto da anotação");
-    text.addEventListener("input", () => { note.text = text.value; scheduleSheetSave(); });
-    remove.addEventListener("click", () => {
-        if (!window.confirm("Remover esta anotação?")) return;
-        sheetData().notes = sheetData().notes.filter((item) => item.id !== note.id);
-        if (persistSheet()) node.remove();
+    text.addEventListener("input", () => {
+        note.text = text.value;
+        node.setAttribute("aria-label", `Ideia do mapa mental: ${MIND_MAP_RULES.title(note)}`);
+        noteBoardController?.selectNote(note.id);
+        noteBoardController?.renderConnections();
+        scheduleSheetSave();
     });
+    remove.addEventListener("click", () => {
+        noteBoardController?.removeNote(note.id, node);
+    });
+    const connect = document.createElement("button");
+    connect.type = "button";
+    connect.className = "note-node__connect";
+    connect.textContent = "↗";
+    connect.setAttribute("aria-label", "Conectar esta ideia a outra");
+    connect.addEventListener("click", () => noteBoardController?.beginConnection(note.id));
+    const kindLabel = document.createElement("span");
+    kindLabel.className = "note-node__kind";
+    kindLabel.textContent = MIND_MAP_RULES.KINDS[note.kind] || MIND_MAP_RULES.KINDS.idea;
+    node.kindLabel = kindLabel;
+    node.addEventListener("click", () => noteBoardController?.selectNote(note.id));
     handle.addEventListener("pointerdown", (event) => {
         event.preventDefault();
         handle.setPointerCapture?.(event.pointerId);
-        const startX = event.clientX - note.x;
-        const startY = event.clientY - note.y;
+        const zoom = noteBoardController?.zoom() || 1;
+        const startX = event.clientX / zoom - note.x;
+        const startY = event.clientY / zoom - note.y;
         function move(pointer) {
-            note.x = Math.max(0, Math.min(canvas.scrollWidth - width, pointer.clientX - startX));
-            note.y = Math.max(0, Math.min(canvas.scrollHeight - height, pointer.clientY - startY));
+            note.x = Math.max(0, Math.min(canvas.scrollWidth - width, pointer.clientX / zoom - startX));
+            note.y = Math.max(0, Math.min(canvas.scrollHeight - height, pointer.clientY / zoom - startY));
             position();
         }
         function stop() {
@@ -1927,8 +2595,9 @@ function renderNote(note) {
         position();
         scheduleSheetSave();
     });
-    node.append(handle, remove, text);
+    node.append(handle, remove, text, connect, kindLabel);
     canvas.append(node);
+    noteBoardController?.nodes.set(note.id, node);
 }
 
 if (character) {
@@ -1936,13 +2605,16 @@ if (character) {
     refreshResourcesForAttributes = setupNexResources();
     setupTabs("[data-description-tab]", "descriptionTab", "textos");
     setupSheetEntries();
+    refreshInventoryLimits = setupInventoryLimits();
+    refreshProgressionForNex = setupProgression();
     setupAbilityCatalog();
     setupRitualCatalog();
+    refreshRitualProgression = setupRitualProgression();
     setupNoteBoard();
     setupOriginTraining();
     setupSkills();
     refreshSkillsForAttributes = setupSkills;
-    refreshCombatForAttributes = () => { renderEquippedWeapon(); renderDefenses(); };
+    refreshCombatForAttributes = () => { renderEquippedWeapon(); renderDefenses(); refreshInventoryLimits(); };
     setupDefenseAdjustments();
     refreshCombatForAttributes();
     setupAttributeEditing();
