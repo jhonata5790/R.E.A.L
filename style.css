@@ -765,6 +765,10 @@ body.hud-hidden #tabletop > :not(#gameCanvas) {
     background: rgba(95, 16, 34, 0.8);
 }
 
+.token-list__item[data-primary="true"] {
+    box-shadow: inset 3px 0 0 var(--accentSoft);
+}
+
 .token-list__item img {
     width: 44px;
     height: 44px;

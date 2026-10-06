@@ -7,6 +7,7 @@
     <title>Criar ficha | R.E.A.L</title>
     <link rel="stylesheet" href="ficha.css?v=20261002-origins">
     <link rel="stylesheet" href="visitor-name.css?v=20260928-visitor">
+    <link rel="stylesheet" href="account.css?v=20261005-account">
     <script src="visitor-name.js?v=20260928-visitor"></script>
 </head>
 <body>
@@ -98,11 +99,15 @@
                 </div>
             </footer>
         </form>
-        <p id="storageNote" class="storage-note" role="status">Por enquanto, suas fichas são salvas neste navegador.</p>
+        <p id="storageNote" class="storage-note" role="status" data-account-storage-status>Por enquanto, suas fichas são salvas neste navegador.</p>
     </main>
     <script src="attribute-themes.js?v=20260922-attribute-themes-final"></script>
     <script src="nex-rules.js?v=20260927-nex-resources"></script>
     <script src="origins.js?v=20261002-origins"></script>
-    <script src="ficha.js?v=20261002-origins"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.3/dist/umd/supabase.js"></script>
+    <script src="supabase-config.js?v=20260928-online-tabletop"></script>
+    <script src="account-library.js?v=20261005-account"></script>
+    <script src="account.js?v=20261005-account"></script>
+    <script src="ficha.js?v=20261005-account"></script>
 </body>
 </html>

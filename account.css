@@ -1,0 +1,69 @@
+.real-account-button {
+    position: fixed;
+    z-index: 80;
+    right: 18px;
+    bottom: 18px;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    max-width: min(320px, calc(100vw - 36px));
+    padding: 10px 14px;
+    color: #fff1f3;
+    background: rgba(24, 13, 25, .96);
+    border: 1px solid rgba(251, 59, 83, .55);
+    border-radius: 999px;
+    box-shadow: 0 12px 34px rgba(0, 0, 0, .42);
+    cursor: pointer;
+}
+
+.real-account-button > span:first-child { color: #fb3b53; font-size: 22px; }
+.real-account-button > span:last-child { display: grid; min-width: 0; text-align: left; }
+.real-account-button strong, .real-account-button small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.real-account-button strong { font-size: 12px; }
+.real-account-button small { color: #b9a7ae; font-size: 10px; }
+.real-account-button.is-signed-in { border-color: rgba(74, 222, 128, .62); }
+.real-account-button.is-signed-in > span:first-child { color: #4ade80; }
+
+.real-account-dialog {
+    width: min(480px, calc(100vw - 28px));
+    padding: 28px;
+    color: #f9eef2;
+    background: #171018;
+    border: 1px solid rgba(251, 59, 83, .45);
+    border-radius: 16px;
+    box-shadow: 0 28px 80px rgba(0, 0, 0, .68);
+}
+
+.real-account-dialog::backdrop { background: rgba(6, 2, 7, .76); backdrop-filter: blur(4px); }
+.real-account-dialog p { color: #b9a7ae; line-height: 1.55; }
+.real-account-close { position: absolute; top: 12px; right: 14px; padding: 4px 9px; color: #d5c4ca; background: transparent; border: 0; font-size: 24px; cursor: pointer; }
+.real-account-brand { display: flex; gap: 12px; align-items: center; margin-bottom: 18px; padding-right: 28px; }
+.real-account-brand > span { color: #fb3b53; font-size: 28px; }
+.real-account-brand small, .real-account-kicker { color: #fb7185 !important; font-size: 10px; font-weight: 800; letter-spacing: .14em; }
+.real-account-brand h2 { margin: 3px 0 0; font-size: clamp(20px, 5vw, 28px); }
+.real-account-form { display: grid; gap: 13px; margin-top: 18px; }
+.real-account-form label { display: grid; gap: 6px; color: #d7c9ce; font-size: 12px; font-weight: 700; }
+.real-account-form label small { color: #887780; font-weight: 500; }
+.real-account-form input { width: 100%; box-sizing: border-box; padding: 11px 12px; color: #fff; background: #0e090f; border: 1px solid #4a3540; border-radius: 8px; font: inherit; }
+.real-account-form input:focus { outline: 2px solid rgba(251, 59, 83, .28); border-color: #fb3b53; }
+.real-account-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+.real-account-dialog button { min-height: 40px; padding: 9px 14px; color: #f9eef2; background: #2b1a23; border: 1px solid #583746; border-radius: 8px; font-weight: 750; cursor: pointer; }
+.real-account-dialog button:disabled { opacity: .5; cursor: wait; }
+.real-account-dialog .real-account-primary { color: #fff; background: #c91f3a; border-color: #fb3b53; }
+.real-account-dialog .real-account-link { width: 100%; color: #d7c9ce; background: transparent; border-color: transparent; }
+.real-account-email { display: block; margin: 7px 0 10px; font-size: 17px; overflow-wrap: anywhere; }
+.real-account-benefits { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0; }
+.real-account-benefits span { padding: 7px 10px; color: #bbf7d0; background: rgba(34, 197, 94, .1); border: 1px solid rgba(74, 222, 128, .25); border-radius: 999px; font-size: 11px; }
+.real-account-message { min-height: 22px; margin: 12px 0 0; font-size: 12px; }
+.real-account-message[data-tone="error"] { color: #fda4af; }
+.real-account-message[data-tone="success"] { color: #86efac; }
+
+@media (max-width: 560px) {
+    .real-account-button { right: 10px; bottom: 10px; }
+    .real-account-dialog { padding: 22px 18px; }
+    .real-account-actions { grid-template-columns: 1fr; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .real-account-dialog::backdrop { backdrop-filter: none; }
+}

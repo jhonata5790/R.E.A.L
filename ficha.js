@@ -64,7 +64,9 @@ let originCloseTimer = null;
 
 function persistState() {
     try {
+        window.REAL_ACCOUNT?.markLibraryDirty(state);
         localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        window.REAL_ACCOUNT?.libraryChanged();
         return true;
     } catch {
         $("storageNote").textContent = "Não foi possível salvar. Verifique o espaço disponível neste navegador.";

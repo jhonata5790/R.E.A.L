@@ -17,6 +17,7 @@ dockToggle.addEventListener("click", () => {
     dockToggle.setAttribute("aria-label", opening ? "Recolher ferramentas da mesa" : "Abrir ferramentas da mesa");
 });
 const VIEW_RULES = window.REAL_TABLETOP_VIEW;
+const SELECTION_RULES = window.REAL_TABLETOP_SELECTION;
 const previewDialog = $("playerPreview");
 const previewCanvas = $("playerPreviewCanvas");
 const previewCtx = previewCanvas.getContext("2d");
@@ -44,6 +45,7 @@ const mapState = {
 
 const tokens = [];
 let selectedToken = null;
+const selectedTokens = new Set();
 let nextTokenId = 1;
 let activeMode = "select";
 let hudVisible = true;
@@ -52,7 +54,9 @@ let saveTimer = null;
 
 const interaction = {
     type: null, token: null, lastX: 0, lastY: 0,
-    offsetX: 0, offsetY: 0, rotationOffset: 0, resizeOffset: 0
+    offsetX: 0, offsetY: 0, rotationOffset: 0, resizeOffset: 0,
+    tokens: [], anchorStart: null, marqueeStart: null, marqueeEnd: null,
+    selectionBeforeMarquee: [], additive: false, moved: false
 };
 const measurement = { drawing: false, start: null, end: null };
 
@@ -276,11 +280,36 @@ $("resetGrid").addEventListener("click", () => {
 });
 
 // Tokens, ficha e camadas
-function selectToken(token) {
-    selectedToken = token;
+function selectedTokenList() {
+    return tokens.filter((token) => selectedTokens.has(token));
+}
+
+function setTokenSelection(selection, primary = null) {
+    const valid = new Set((Array.isArray(selection) ? selection : []).filter((token) => tokens.includes(token)));
+    selectedTokens.clear();
+    valid.forEach((token) => selectedTokens.add(token));
+    selectedToken = primary && selectedTokens.has(primary) ? primary : selectedTokenList().at(-1) || null;
     updateTokenLibrary();
     updateTokenInspector();
     requestRender();
+}
+
+function selectToken(token, options = {}) {
+    if (!token) {
+        setTokenSelection([]);
+        return;
+    }
+    if (options.additive) {
+        const selection = selectedTokenList();
+        if (selectedTokens.has(token)) setTokenSelection(selection.filter((item) => item !== token));
+        else setTokenSelection([...selection, token], token);
+        return;
+    }
+    if (options.preserveGroup && selectedTokens.has(token)) {
+        setTokenSelection(selectedTokenList(), token);
+        return;
+    }
+    setTokenSelection([token], token);
 }
 
 function updateTokenLibrary() {
@@ -297,7 +326,8 @@ function updateTokenLibrary() {
         const item = document.createElement("button");
         item.type = "button";
         item.className = "token-list__item";
-        item.setAttribute("aria-pressed", String(selectedToken === token));
+        item.setAttribute("aria-pressed", String(selectedTokens.has(token)));
+        item.dataset.primary = String(selectedToken === token);
         const thumbnail = document.createElement("img");
         thumbnail.src = token.source;
         thumbnail.alt = "";
@@ -310,18 +340,22 @@ function updateTokenLibrary() {
         const identifier = document.createElement("small");
         identifier.textContent = "#" + token.id;
         item.append(thumbnail, information, identifier);
-        item.addEventListener("click", () => selectToken(token));
+        item.addEventListener("click", (event) => selectToken(token, { additive: event.ctrlKey || event.metaKey || event.shiftKey }));
         list.append(item);
     });
-    const enabled = Boolean(selectedToken);
+    const selectionCount = selectedTokens.size;
+    const enabled = selectionCount > 0;
+    $("tokenSelectionCount").textContent = selectionCount ? `${selectionCount} selecionado${selectionCount === 1 ? "" : "s"}` : "Nenhum selecionado";
     $("duplicateToken").disabled = !enabled;
     $("deleteToken").disabled = !enabled;
+    $("selectAllTokens").disabled = !tokens.length || selectionCount === tokens.length;
+    $("clearTokenSelection").disabled = !enabled;
 }
 
 function updateTokenInspector() {
     const inspector = $("tokenInspector");
-    inspector.hidden = !selectedToken;
-    if (!selectedToken) return;
+    inspector.hidden = selectedTokens.size !== 1 || !selectedToken;
+    if (inspector.hidden) return;
     $("tokenNameInput").value = selectedToken.name;
     $("tokenTypeInput").value = selectedToken.type;
     $("tokenColorInput").value = selectedToken.color;
@@ -378,32 +412,40 @@ $("tokenFileInput").addEventListener("change", async () => {
     $("tokenFileInput").value = "";
 });
 
-function duplicateSelectedToken() {
-    if (!selectedToken) return;
-    createToken(selectedToken.source, selectedToken.name + " (cópia)", {
-        image: selectedToken.image,
-        x: selectedToken.x + 24, y: selectedToken.y + 24,
-        width: selectedToken.width, rotation: selectedToken.rotation,
-        type: selectedToken.type, color: selectedToken.color,
-        hp: selectedToken.hp, maxHp: selectedToken.maxHp,
-        condition: selectedToken.condition,
-        visibleToPlayers: selectedToken.visibleToPlayers,
-        showName: selectedToken.showName,
-        showHealth: selectedToken.showHealth
-    });
+async function duplicateSelectedToken() {
+    const originals = selectedTokenList();
+    if (!originals.length) return;
+    const copies = [];
+    for (const token of originals) {
+        const copy = await createToken(token.source, token.name + " (cópia)", {
+            image: token.image,
+            x: token.x + 24, y: token.y + 24,
+            width: token.width, rotation: token.rotation,
+            type: token.type, color: token.color,
+            hp: token.hp, maxHp: token.maxHp,
+            condition: token.condition,
+            visibleToPlayers: token.visibleToPlayers,
+            showName: token.showName,
+            showHealth: token.showHealth,
+            select: false,
+            save: false
+        });
+        if (copy) copies.push(copy);
+    }
+    if (copies.length) setTokenSelection(copies, copies.at(-1));
+    scheduleSave();
 }
 
 function deleteSelectedToken() {
-    if (!selectedToken) return;
-    const index = tokens.indexOf(selectedToken);
-    if (index < 0) return;
-    tokens.splice(index, 1);
-    selectToken(tokens[Math.min(index, tokens.length - 1)] || null);
+    const removing = new Set(selectedTokenList());
+    if (!removing.size) return;
+    for (let index = tokens.length - 1; index >= 0; index--) if (removing.has(tokens[index])) tokens.splice(index, 1);
+    setTokenSelection([]);
     scheduleSave();
 }
 
 function moveSelectedTokenLayer(direction) {
-    if (!selectedToken) return;
+    if (!selectedToken || selectedTokens.size !== 1) return;
     const index = tokens.indexOf(selectedToken);
     const target = index + direction;
     if (target < 0 || target >= tokens.length) return;
@@ -413,6 +455,8 @@ function moveSelectedTokenLayer(direction) {
 
 $("duplicateToken").addEventListener("click", duplicateSelectedToken);
 $("deleteToken").addEventListener("click", deleteSelectedToken);
+$("selectAllTokens").addEventListener("click", () => setTokenSelection(tokens, tokens.at(-1) || null));
+$("clearTokenSelection").addEventListener("click", () => setTokenSelection([]));
 $("sendTokenBackward").addEventListener("click", () => moveSelectedTokenLayer(-1));
 $("bringTokenForward").addEventListener("click", () => moveSelectedTokenLayer(1));
 
@@ -648,7 +692,7 @@ canvas.addEventListener("mousedown", (event) => {
         requestRender();
         return;
     }
-    if (hudVisible && selectedToken) {
+    if (hudVisible && selectedToken && selectedTokens.size === 1) {
         const controls = getTokenControls(selectedToken);
         if (isInsideControl(event.clientX, event.clientY, controls.resize)) {
             interaction.type = "resize";
@@ -669,14 +713,26 @@ canvas.addEventListener("mousedown", (event) => {
     }
     const token = getTopmostTokenAt(point);
     if (token) {
-        selectToken(token);
+        const additive = event.ctrlKey || event.metaKey || event.shiftKey;
+        selectToken(token, { additive, preserveGroup: !additive });
+        if (!selectedTokens.has(token)) return;
         interaction.type = "drag";
         interaction.token = token;
         interaction.offsetX = point.x - token.x;
         interaction.offsetY = point.y - token.y;
+        interaction.anchorStart = { x: token.x, y: token.y };
+        interaction.tokens = selectedTokenList().map((item) => ({ token: item, x: item.x, y: item.y }));
+        interaction.moved = false;
         canvas.style.cursor = "grabbing";
     } else {
-        selectToken(null);
+        const additive = event.ctrlKey || event.metaKey || event.shiftKey;
+        interaction.type = "marquee";
+        interaction.marqueeStart = point;
+        interaction.marqueeEnd = point;
+        interaction.additive = additive;
+        interaction.selectionBeforeMarquee = additive ? selectedTokenList() : [];
+        if (!additive) selectToken(null);
+        canvas.style.cursor = "crosshair";
     }
 });
 
@@ -697,10 +753,21 @@ canvas.addEventListener("mousemove", (event) => {
         playerView.y = point.y - interaction.offsetY;
         requestRender(); return;
     }
+    if (interaction.type === "marquee") {
+        interaction.marqueeEnd = point;
+        requestRender(); return;
+    }
     const token = interaction.token;
     if (interaction.type === "drag" && token) {
-        token.x = point.x - interaction.offsetX;
-        token.y = point.y - interaction.offsetY;
+        const nextX = point.x - interaction.offsetX;
+        const nextY = point.y - interaction.offsetY;
+        const deltaX = nextX - interaction.anchorStart.x;
+        const deltaY = nextY - interaction.anchorStart.y;
+        interaction.tokens.forEach((item) => {
+            item.token.x = item.x + deltaX;
+            item.token.y = item.y + deltaY;
+        });
+        interaction.moved = interaction.moved || Math.abs(deltaX) > .5 || Math.abs(deltaY) > .5;
         requestRender(); return;
     }
     if (interaction.type === "resize" && token) {
@@ -716,7 +783,7 @@ canvas.addEventListener("mousemove", (event) => {
     }
     if (!hudVisible) canvas.style.cursor = getTopmostTokenAt(point) ? "grab" : "default";
     else if (activeMode === "ruler" || activeMode === "player-view") canvas.style.cursor = "crosshair";
-    else if (selectedToken) {
+    else if (selectedToken && selectedTokens.size === 1) {
         const controls = getTokenControls(selectedToken);
         if (isInsideControl(event.clientX, event.clientY, controls.resize)) canvas.style.cursor = "nesw-resize";
         else if (isInsideControl(event.clientX, event.clientY, controls.rotation)) canvas.style.cursor = "grab";
@@ -728,9 +795,18 @@ canvas.addEventListener("mouseup", (event) => {
     if (event.button === 0 && measurement.drawing) {
         measurement.drawing = false; updateRulerUI(); requestRender();
     }
-    if (event.button === 0 && interaction.type === "drag" && interaction.token && event.shiftKey) {
-        interaction.token.x = Math.round((interaction.token.x - gridSettings.offsetX) / gridSettings.size) * gridSettings.size + gridSettings.offsetX;
-        interaction.token.y = Math.round((interaction.token.y - gridSettings.offsetY) / gridSettings.size) * gridSettings.size + gridSettings.offsetY;
+    if (event.button === 0 && interaction.type === "drag" && interaction.token && interaction.moved && event.shiftKey) {
+        const delta = SELECTION_RULES.snapDelta(interaction.token, gridSettings);
+        interaction.tokens.forEach((item) => {
+            item.token.x += delta.x;
+            item.token.y += delta.y;
+        });
+    }
+    if (event.button === 0 && interaction.type === "marquee") {
+        const ids = SELECTION_RULES.rectangleIds(tokens, interaction.marqueeStart, interaction.marqueeEnd);
+        const inside = tokens.filter((token) => ids.includes(token.id));
+        const combined = interaction.additive ? [...interaction.selectionBeforeMarquee, ...inside.filter((token) => !interaction.selectionBeforeMarquee.includes(token))] : inside;
+        setTokenSelection(combined, inside.at(-1) || combined.at(-1) || null);
     }
     if (interaction.type && interaction.type !== "pan" && interaction.type !== "player-view") {
         updateTokenLibrary(); updateTokenInspector(); scheduleSave();
@@ -739,6 +815,11 @@ canvas.addEventListener("mouseup", (event) => {
     if (event.button === 2 || event.button === 0) {
         interaction.type = null;
         interaction.token = null;
+        interaction.tokens = [];
+        interaction.anchorStart = null;
+        interaction.moved = false;
+        interaction.marqueeStart = null;
+        interaction.marqueeEnd = null;
         canvas.style.cursor = activeMode === "ruler" || activeMode === "player-view" ? "crosshair" : "default";
     }
 });
@@ -747,6 +828,11 @@ canvas.addEventListener("mouseleave", () => {
     if (interaction.type) scheduleSave();
     interaction.type = null;
     interaction.token = null;
+    interaction.tokens = [];
+    interaction.anchorStart = null;
+    interaction.moved = false;
+    interaction.marqueeStart = null;
+    interaction.marqueeEnd = null;
     measurement.drawing = false;
     canvas.style.cursor = activeMode === "ruler" || activeMode === "player-view" ? "crosshair" : "default";
 });
@@ -823,7 +909,8 @@ function serializeSession() {
             maxHp: token.maxHp, condition: token.condition,
             showName: token.showName, showHealth: token.showHealth
         })),
-        selectedTokenId: selectedToken?.id || null
+        selectedTokenId: selectedToken?.id || null,
+        selectedTokenIds: selectedTokenList().map((token) => token.id)
     };
 }
 
@@ -865,11 +952,17 @@ async function applySession(data) {
     } else clearMap(false);
     tokens.splice(0);
     selectedToken = null;
+    selectedTokens.clear();
     nextTokenId = 1;
     for (const savedToken of (data.tokens || []).filter((token) => isImportedImage(token.source))) {
         await createToken(savedToken.source, savedToken.name, { ...savedToken, select: false, save: false });
     }
-    selectedToken = tokens.find((token) => token.id === data.selectedTokenId) || null;
+    const restoredIds = SELECTION_RULES.validIds(tokens, data.selectedTokenIds, data.selectedTokenId);
+    restoredIds.forEach((id) => {
+        const token = tokens.find((item) => item.id === id);
+        if (token) selectedTokens.add(token);
+    });
+    selectedToken = tokens.find((token) => token.id === data.selectedTokenId && selectedTokens.has(token)) || selectedTokenList().at(-1) || null;
     updateMapUI(); updateGridUI(); updateTokenLibrary(); updateTokenInspector(); updateRulerUI(); updatePlayerViewUI(); requestRender();
     return true;
 }
@@ -890,6 +983,7 @@ async function loadLastSession(showMessage = true) {
 async function createNewSession() {
     tokens.splice(0);
     selectedToken = null;
+    selectedTokens.clear();
     nextTokenId = 1;
     Object.assign(camera, { x: 0, y: 0, zoom: 1 });
     Object.assign(playerView, VIEW_RULES.normalize());
@@ -918,8 +1012,12 @@ window.addEventListener("keydown", (event) => {
         closePanels();
         clearMeasurement();
         setMode("select");
+        if (!isTyping) setTokenSelection([]);
     }
     if (hudVisible && !isTyping && event.key === "Delete") deleteSelectedToken();
+    if (hudVisible && !isTyping && (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "a") {
+        event.preventDefault(); setTokenSelection(tokens, tokens.at(-1) || null);
+    }
     if (hudVisible && !isTyping && (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "d") {
         event.preventDefault(); duplicateSelectedToken();
     }
@@ -1009,14 +1107,18 @@ function drawTokenInformation(token, transform) {
     ctx.restore();
 }
 
-function drawTokenSelection() {
-    if (!selectedToken?.loaded) return;
-    const transform = getTokenTransform(selectedToken);
+function drawTokenSelection(token, primary = false) {
+    if (!token?.loaded) return;
+    const transform = getTokenTransform(token);
     ctx.save();
     ctx.translate(transform.x, transform.y); ctx.rotate(transform.rotation);
-    ctx.strokeStyle = selectedToken.color; ctx.lineWidth = 2; ctx.setLineDash([6, 4]);
+    ctx.strokeStyle = token.color; ctx.lineWidth = primary ? 3 : 2; ctx.setLineDash(primary ? [7, 4] : [4, 4]);
     ctx.strokeRect(-transform.width / 2, -transform.height / 2, transform.width, transform.height);
     ctx.restore();
+}
+
+function drawTokenSelections() {
+    selectedTokenList().forEach((token) => drawTokenSelection(token, token === selectedToken));
 }
 
 function drawCircularHandle(handle, symbol) {
@@ -1030,7 +1132,7 @@ function drawCircularHandle(handle, symbol) {
 }
 
 function drawTokenControls() {
-    if (!selectedToken?.loaded || activeMode === "ruler") return;
+    if (!selectedToken?.loaded || selectedTokens.size !== 1 || activeMode === "ruler") return;
     const controls = getTokenControls(selectedToken);
     ctx.save(); ctx.beginPath();
     ctx.moveTo(controls.tokenBase.x, controls.tokenBase.y);
@@ -1038,6 +1140,24 @@ function drawTokenControls() {
     ctx.strokeStyle = selectedToken.color; ctx.lineWidth = 2; ctx.setLineDash([5, 4]); ctx.stroke(); ctx.restore();
     drawCircularHandle(controls.resize, "↗");
     drawCircularHandle(controls.rotation, "↻");
+}
+
+function drawMarqueeSelection() {
+    if (interaction.type !== "marquee" || !interaction.marqueeStart || !interaction.marqueeEnd) return;
+    const start = worldToScreen(interaction.marqueeStart);
+    const end = worldToScreen(interaction.marqueeEnd);
+    const left = Math.min(start.x, end.x);
+    const top = Math.min(start.y, end.y);
+    const width = Math.abs(end.x - start.x);
+    const height = Math.abs(end.y - start.y);
+    ctx.save();
+    ctx.fillStyle = "rgba(251,59,83,.12)";
+    ctx.strokeStyle = THEME.accentSoft;
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([7, 5]);
+    ctx.fillRect(left, top, width, height);
+    ctx.strokeRect(left, top, width, height);
+    ctx.restore();
 }
 
 function drawMeasurement() {
@@ -1179,7 +1299,7 @@ function draw() {
     if (hudVisible) { drawAtmosphere(); drawGrid(); }
     tokens.forEach(drawToken);
     if (hudVisible) {
-        drawTokenSelection(); drawTokenControls(); drawMeasurement();
+        drawTokenSelections(); drawTokenControls(); drawMarqueeSelection(); drawMeasurement();
         drawPlayerFrame(); drawCornerMarks(); drawOverlay();
     }
 }

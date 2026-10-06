@@ -72,7 +72,8 @@ function loadState() {
                 characters: Array.isArray(campaign.characters) ? campaign.characters : []
             })),
             characters: Array.isArray(saved.characters) ? saved.characters : [],
-            homebrew: Array.isArray(saved.homebrew) ? saved.homebrew : []
+            homebrew: Array.isArray(saved.homebrew) ? saved.homebrew : [],
+            _account: saved._account && typeof saved._account === "object" ? saved._account : undefined
         };
     }
     const legacy = readJson(LEGACY_KEY);
@@ -98,10 +99,12 @@ let editingCampaignId = null;
 let editingEntry = null;
 let homebrewFilter = "todos";
 
-function saveState() {
+function saveState(markDirty = true) {
     try {
+        if (markDirty) window.REAL_ACCOUNT?.markLibraryDirty(state);
         localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-        $("storageStatus").textContent = "Salvo neste navegador";
+        if (markDirty) window.REAL_ACCOUNT?.libraryChanged();
+        $("storageStatus").textContent = window.REAL_ACCOUNT?.isSignedIn() ? "Sincronizando com sua conta…" : "Salvo neste navegador";
         return true;
     } catch {
         $("storageStatus").textContent = "Não foi possível salvar: verifique o espaço do navegador";
@@ -485,7 +488,7 @@ $("assignCharacter").addEventListener("click", () => {
 });
 $("searchThreats").addEventListener("input", renderThreats);
 $("searchHomebrew").addEventListener("input", renderHomebrew);
-saveState();
+saveState(false);
 renderAll();
 const route = currentRoute();
 navigate(route.view, route.id, true);

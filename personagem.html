@@ -7,6 +7,7 @@
     <title>Ficha de personagem | R.E.A.L</title>
     <link rel="stylesheet" href="personagem.css?v=20261003-mind-map">
     <link rel="stylesheet" href="visitor-name.css?v=20260928-visitor">
+    <link rel="stylesheet" href="account.css?v=20261005-account">
     <script src="visitor-name.js?v=20260928-visitor"></script>
 </head>
 <body>
@@ -258,7 +259,7 @@
                 <p class="pending-note">Registrar um ritual não o conjura. Os botões disponíveis somam os dados da forma escolhida, sem gastar recursos ou aplicar dano ou cura ao alvo. Requisitos e resistências continuam sob controle da mesa.</p>
                 <div id="ritualsList" class="entry-list entry-list--accordion"></div>
             </section>
-            <p id="storageNote" class="storage-note" role="status">Esta ficha está salva neste navegador.</p>
+                    <p id="storageNote" class="storage-note" role="status" data-account-storage-status>Esta ficha está salva neste navegador.</p>
         </div>
     </main>
 
@@ -326,6 +327,10 @@
     <script src="ritual-catalog.js?v=20261002-rituals"></script>
     <script src="sheet-mechanics.js?v=20261002-mechanics"></script>
     <script src="mind-map-rules.js?v=20261003-mind-map"></script>
-    <script src="personagem.js?v=20261003-mind-map"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.3/dist/umd/supabase.js"></script>
+    <script src="supabase-config.js?v=20260928-online-tabletop"></script>
+    <script src="account-library.js?v=20261005-account"></script>
+    <script src="account.js?v=20261005-account"></script>
+    <script src="personagem.js?v=20261005-account"></script>
 </body>
 </html>

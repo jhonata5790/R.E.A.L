@@ -7,6 +7,7 @@
     <title>Campanhas | R.E.A.L</title>
     <link rel="stylesheet" href="campaign.css?v=20260924-real-brand">
     <link rel="stylesheet" href="visitor-name.css?v=20260928-visitor">
+    <link rel="stylesheet" href="account.css?v=20261005-account">
     <script src="visitor-name.js?v=20260928-visitor"></script>
 </head>
 <body>
@@ -23,13 +24,13 @@
                 <button class="nav-link" data-view="ameacas" type="button"><span aria-hidden="true">⚔</span> Ameaças</button>
                 <button class="nav-link" data-view="homebrew" type="button"><span aria-hidden="true">✧</span> Homebrew</button>
             </nav>
-            <div class="sidebar__footer"><span class="status-dot" aria-hidden="true"></span> Salvo neste navegador</div>
+            <div class="sidebar__footer" data-account-storage-status><span class="status-dot" aria-hidden="true"></span> Salvo neste navegador</div>
         </aside>
 
         <div class="main-column">
             <header class="topbar">
                 <span class="topbar__eyebrow">R.E.A.L · ESPAÇO DO MESTRE</span>
-                <span id="storageStatus" class="topbar__status" role="status">Seus dados ficam neste navegador</span>
+                <span id="storageStatus" class="topbar__status" role="status" data-account-storage-status>Seus dados ficam neste navegador</span>
             </header>
 
             <main id="mainContent">
@@ -122,6 +123,10 @@
         </form>
     </dialog>
 
-    <script src="campaign.js?v=20260924-real-brand"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.3/dist/umd/supabase.js"></script>
+    <script src="supabase-config.js?v=20260928-online-tabletop"></script>
+    <script src="account-library.js?v=20261005-account"></script>
+    <script src="account.js?v=20261005-account"></script>
+    <script src="campaign.js?v=20261005-account"></script>
 </body>
 </html>

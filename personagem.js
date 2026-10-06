@@ -653,9 +653,11 @@ function persistSheet() {
         current.sheet = sheetData();
         if (attributesDirty) current.attributes = { ...character.attributes };
         if (NEX_RULES.allowedNex(classTheme(character)).includes(character.nex)) current.nex = character.nex;
+        window.REAL_ACCOUNT?.markLibraryDirty(latest);
         localStorage.setItem(STORAGE_KEY, JSON.stringify(latest));
+        window.REAL_ACCOUNT?.libraryChanged();
         attributesDirty = false;
-        $("storageNote").textContent = "Esta ficha está salva neste navegador.";
+        $("storageNote").textContent = window.REAL_ACCOUNT?.isSignedIn() ? "Sincronizando esta ficha com sua conta…" : "Esta ficha está salva neste navegador.";
         return true;
     } catch {
         $("storageNote").textContent = "Não foi possível salvar. Verifique o espaço disponível neste navegador.";

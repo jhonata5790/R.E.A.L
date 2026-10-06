@@ -9,7 +9,7 @@
 
     <title>Mesa tática | R.E.A.L</title>
 
-    <link rel="stylesheet" href="style.css?v=20260928-hud-menu">
+    <link rel="stylesheet" href="style.css?v=20261005-multi-select">
     <link rel="stylesheet" href="visitor-name.css?v=20260928-visitor">
     <script src="visitor-name.js?v=20260928-visitor"></script>
 </head>
@@ -234,7 +234,7 @@
             </button>
 
             <p class="settings-hint">
-                Movimento livre por padrão. Segure <kbd>Shift</kbd> ao soltar um token para encaixá-lo.
+                Movimento livre por padrão. Segure <kbd>Shift</kbd> ao soltar um token ou grupo para encaixá-lo.
             </p>
         </section>
 
@@ -275,7 +275,7 @@
 
             <div class="token-panel__summary">
                 <span id="tokenCount">0 tokens na mesa</span>
-                <small>Clique para selecionar</small>
+                <small id="tokenSelectionCount">Nenhum selecionado</small>
             </div>
 
             <div
@@ -285,6 +285,12 @@
             ></div>
 
             <div class="token-panel__selected-actions">
+                <button id="selectAllTokens" type="button" disabled>
+                    Selecionar todos
+                </button>
+                <button id="clearTokenSelection" type="button" disabled>
+                    Limpar seleção
+                </button>
                 <button id="duplicateToken" type="button" disabled>
                     Duplicar
                 </button>
@@ -363,7 +369,7 @@
             </section>
 
             <p class="settings-hint">
-                Atalhos: <kbd>Ctrl</kbd> + <kbd>D</kbd> duplica e <kbd>Delete</kbd> remove o token selecionado.
+                <kbd>Ctrl</kbd>/<kbd>Cmd</kbd> ou <kbd>Shift</kbd> adiciona tokens à seleção. Arraste no vazio para selecionar uma área. <kbd>Ctrl</kbd> + <kbd>A</kbd> seleciona todos, <kbd>Ctrl</kbd> + <kbd>D</kbd> duplica e <kbd>Delete</kbd> remove a seleção.
             </p>
         </section>
 
@@ -571,7 +577,8 @@
     </main>
 
     <script src="tabletop-view.js?v=20260927-player-view"></script>
-    <script src="script.js?v=20260928-tool-dock"></script>
+    <script src="tabletop-selection.js?v=20261005-multi-select"></script>
+    <script src="script.js?v=20261005-multi-select"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.3/dist/umd/supabase.js"></script>
     <script src="supabase-config.js?v=20260928-online-tabletop"></script>
     <script src="tabletop-online.js?v=20260929-documents"></script>
