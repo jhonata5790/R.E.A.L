@@ -2,131 +2,69 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="theme-color" content="#100b12">
-    <title>Campanhas | R.E.A.L</title>
-    <link rel="stylesheet" href="campaign.css?v=20260924-real-brand">
-    <link rel="stylesheet" href="visitor-name.css?v=20260928-visitor">
-    <link rel="stylesheet" href="account.css?v=20261005-account">
-    <script src="visitor-name.js?v=20260928-visitor"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#09070b">
+    <title>R.E.A.L | Tabletop online</title>
+    <link rel="stylesheet" href="assets/css/portal.css?v=20261012-workspace">
+    <link rel="stylesheet" href="assets/css/account.css?v=20261012-workspace">
 </head>
 <body>
-    <div class="site-shell">
-        <aside class="sidebar">
-            <a class="brand" href="#campanhas" aria-label="R.E.A.L: campanhas">
-                <span class="brand__mark" aria-hidden="true">✦</span>
-                <span class="brand__copy"><strong>R.E.A.L</strong><small>RPG entre amigos loucos</small></span>
-            </a>
-            <div class="sidebar__group-label">SUA BIBLIOTECA</div>
-            <nav class="sidebar__nav" aria-label="Navegação principal">
-                <button class="nav-link is-active" data-view="campanhas" type="button"><span aria-hidden="true">⌂</span> Campanhas</button>
-                <button class="nav-link" data-view="personagens" type="button"><span aria-hidden="true">♟</span> Personagens</button>
-                <button class="nav-link" data-view="ameacas" type="button"><span aria-hidden="true">⚔</span> Ameaças</button>
-                <button class="nav-link" data-view="homebrew" type="button"><span aria-hidden="true">✧</span> Homebrew</button>
-            </nav>
-            <div class="sidebar__footer" data-account-storage-status><span class="status-dot" aria-hidden="true"></span> Salvo neste navegador</div>
-        </aside>
+    <div class="portal-shell">
+        <header class="portal-header">
+            <a class="portal-brand" href="#inicio" aria-label="R.E.A.L: início"><span class="portal-brand__mark" aria-hidden="true">✦</span><span><strong>R.E.A.L</strong><small>TABLETOP ONLINE</small></span></a>
+            <div class="portal-header__right"><span id="storageStatus" class="portal-storage" data-account-storage-status>Mesas neste aparelho</span><div id="accountSlot"></div></div>
+        </header>
+        <main>
+            <section id="view-home" aria-labelledby="portalTitle">
+                <div class="home-intro">
+                    <div><span class="eyebrow">PRONTO PARA A PRÓXIMA SESSÃO?</span><h1 id="portalTitle">Seu grupo.<br>Sua próxima cena.</h1><p>Prepare uma mesa, organize os materiais e encontre o grupo no mapa.</p></div>
+                    <div class="portal-actions"><button id="createTable" class="button button--primary" type="button">＋ Criar mesa</button><button id="accessTable" class="button button--secondary" type="button">↗ Acessar por convite</button></div>
+                </div>
+                <a id="continueTable" class="continue-table" href="mesa.html" hidden><span class="continue-table__icon" aria-hidden="true">↗</span><span><small>DE ONDE VOCÊ PAROU</small><strong id="continueTableName">Continuar última mesa</strong></span><span aria-hidden="true">→</span></a>
+                <section id="savedTablesSection" class="saved-tables" aria-labelledby="savedTablesTitle">
+                    <div class="section-heading"><div><span class="eyebrow">SEU ESPAÇO</span><h2 id="savedTablesTitle">Suas mesas</h2></div><span id="tableCount">0 mesas</span></div>
+                    <div class="table-filters"><label class="table-search">⌕ <input id="searchTables" type="search" placeholder="Buscar pelo nome ou descrição" aria-label="Buscar mesas"></label><label>Ordenar<select id="sortTables"><option value="recent">Mais recentes</option><option value="name">Nome A–Z</option></select></label></div>
+                    <div id="tableList" class="table-grid"></div>
+                    <div id="emptyTables" class="portal-empty"><span aria-hidden="true">⌗</span><h3>Sua primeira mesa começa aqui</h3><p>Use “Criar mesa” para preparar o mapa, ou “Acessar por convite” para acompanhar seu grupo.</p></div>
+                    <p id="noTableResults" class="portal-empty" hidden>Nenhuma mesa encontrada. Tente outro nome.</p>
+                </section>
+                <div class="storage-explainer"><span aria-hidden="true">◉</span><p><strong>Você sabe onde está cada coisa.</strong> Nome, descrição e capa podem ficar na conta. Cenas, mapas, tokens, documentos e anotações privadas ficam neste aparelho.</p></div>
+            </section>
 
-        <div class="main-column">
-            <header class="topbar">
-                <span class="topbar__eyebrow">R.E.A.L · ESPAÇO DO MESTRE</span>
-                <span id="storageStatus" class="topbar__status" role="status" data-account-storage-status>Seus dados ficam neste navegador</span>
-            </header>
-
-            <main id="mainContent">
-                <section id="view-campanhas" class="view">
-                    <div class="hero hero--landing">
-                        <div class="hero__copy">
-                            <span class="eyebrow">O COMEÇO DE CADA HISTÓRIA</span>
-                            <h1>Suas campanhas</h1>
-                            <p>Organize suas aventuras e entre na mesa da campanha que vai mestrar.</p>
-                            <div class="hero__actions"><button id="newCampaignHero" class="button button--primary" type="button">+ Nova campanha</button></div>
-                        </div>
-                        <div class="hero__art" role="img" aria-label="Ilustração abstrata da campanha"></div>
+            <section id="view-table" class="table-room" aria-labelledby="tableTitle" hidden>
+                <div class="room-topline"><button id="backToHome" class="back-button" type="button">← Suas mesas</button><span class="room-badge">SALA DO MESTRE</span></div>
+                <header class="room-heading"><div><h1 id="tableTitle">Minha mesa</h1><p id="tableDescription"></p></div><div class="portal-actions"><button id="editTable" class="button button--secondary" type="button">Editar mesa</button><a id="openTabletop" class="button button--primary" href="mesa.html">Abrir tabletop →</a></div></header>
+                <div class="room-layout">
+                    <div class="room-main">
+                        <section class="room-panel room-preview"><div class="room-panel__heading"><div><span class="eyebrow">CENA ATIVA</span><h2 id="activeSceneName">Cena inicial</h2></div><span class="local-badge">Neste aparelho</span></div><div id="roomPreviewBlank" class="preview-placeholder"><span aria-hidden="true">⌗</span><p>Importe um mapa para preparar a primeira cena.</p></div><img id="roomPreviewImage" class="room-preview__image" alt="Prévia da cena ativa" hidden><div id="tabletopSummary" class="tabletop-summary" role="status">Abrindo suas cenas…</div></section>
+                        <section class="room-panel" aria-labelledby="scenesTitle"><div class="room-panel__heading"><div><span class="eyebrow">A HISTÓRIA MUDA DE LUGAR</span><h2 id="scenesTitle">Cenas <small id="sceneCount"></small></h2></div><button id="addScene" class="button button--secondary" type="button">＋ Nova cena</button></div><p class="room-hint">Cada cena guarda seu mapa, tokens, grade e câmeras. Ative uma cena para continuar nela.</p><div id="sceneList" class="scene-grid"></div></section>
+                        <section class="room-panel" aria-labelledby="documentsTitle"><div class="room-panel__heading"><div><span class="eyebrow">MATERIAIS DA SESSÃO</span><h2 id="documentsTitle">Documentos</h2></div><button id="addDocument" class="button button--secondary" type="button">＋ Documento</button></div><p class="room-hint">Prepare textos e imagens aqui. Só aparecem para os jogadores quando você revelar.</p><div id="roomDocumentList" class="room-document-list"></div></section>
+                        <section class="room-panel"><div class="room-panel__heading"><h2>Anotações privadas</h2><span id="notesStatus" class="local-badge" role="status">Neste aparelho</span></div><label class="sr-only" for="roomNotes">Anotações privadas da mesa</label><textarea id="roomNotes" class="room-notes" rows="6" maxlength="20000" placeholder="Lembretes, detalhes da sessão e ideias que só você precisa ver…"></textarea></section>
                     </div>
-                    <div class="section-heading">
-                        <div><span class="eyebrow">BIBLIOTECA</span><h2>Campanhas</h2></div>
-                        <span id="campaignCount" class="catalog-count">0 campanhas</span>
-                    </div>
-                    <div id="campaignList" class="campaign-grid"></div>
-                </section>
-
-                <section id="view-campanha" class="view" hidden>
-                    <button id="backToCampaigns" class="text-button" type="button">← Todas as campanhas</button>
-                    <div class="hero hero--detail">
-                        <div class="hero__copy">
-                            <span class="eyebrow">CAMPANHA</span>
-                            <h1 id="detailTitle">Minha campanha</h1>
-                            <p id="detailDescription"></p>
-                            <div class="hero__actions">
-                                <a id="openTabletop" class="button button--primary" href="mesa.html">Entrar na mesa <span aria-hidden="true">→</span></a>
-                                <button id="editCampaign" class="button button--ghost" type="button">Editar campanha</button>
-                            </div>
-                        </div>
-                        <div class="hero__art" role="img" aria-label="Ilustração abstrata da campanha"></div>
-                    </div>
-                    <div class="campaign-sections">
-                        <section class="home-panel">
-                            <div class="home-panel__heading"><span class="eyebrow">ELENCO DA HISTÓRIA</span><h2>Personagens na campanha</h2></div>
-                            <p class="panel-description">Escolha personagens da sua biblioteca para participar desta campanha.</p>
-                            <div class="character-picker">
-                                <label class="sr-only" for="characterPicker">Personagem da biblioteca</label>
-                                <select id="characterPicker"><option value="">Selecione um personagem</option></select>
-                                <button id="assignCharacter" class="button button--primary" type="button">Adicionar</button>
-                            </div>
-                            <div id="campaignCharacters" class="assigned-characters"></div>
-                        </section>
-                        <section class="home-panel">
-                            <div class="home-panel__heading"><span class="eyebrow">MAPA E TOKENS</span><h2>Mesa tática</h2></div>
-                            <div id="tabletopSummary" class="tabletop-summary" role="status">Verificando mesa...</div>
-                            <a id="openTabletopSecondary" class="button button--ghost" href="mesa.html">Abrir mesa <span aria-hidden="true">→</span></a>
-                        </section>
-                    </div>
-                </section>
-
-                <section id="view-personagens" class="view" hidden>
-                    <div class="page-heading"><div><span class="eyebrow">SUA BIBLIOTECA</span><h1>Personagens</h1><p>Fichas de personagens que você pode usar nas suas campanhas.</p></div><a class="button button--primary" href="ficha.html">+ Novo personagem</a></div>
-                    <div class="catalog-toolbar"><label class="search-field"><span aria-hidden="true">⌕</span><input id="searchCharacters" type="search" placeholder="Buscar personagens" aria-label="Buscar personagens"></label><span id="characterCount" class="catalog-count">0 personagens</span></div>
-                    <div id="characterList" class="entry-grid"></div>
-                </section>
-
-                <section id="view-ameacas" class="view" hidden>
-                    <div class="page-heading"><div><span class="eyebrow">BESTIÁRIO</span><h1>Ameaças</h1><p>Um espaço separado para consultar as criaturas oficiais de Ordem Paranormal.</p></div></div>
-                    <div class="catalog-note"><span aria-hidden="true">✦</span><div><strong>Catálogo oficial em preparação</strong><p>A estrutura de consulta está pronta. Ainda não incluí criaturas ou estatísticas sem uma fonte de conteúdo definida, para não apresentar regras incorretas.</p></div></div>
-                    <div class="catalog-toolbar"><label class="search-field"><span aria-hidden="true">⌕</span><input id="searchThreats" type="search" placeholder="Buscar ameaças" aria-label="Buscar ameaças"></label><span id="threatCount" class="catalog-count">0 ameaças</span></div>
-                    <div id="threatList" class="entry-grid"></div>
-                </section>
-
-                <section id="view-homebrew" class="view" hidden>
-                    <div class="page-heading"><div><span class="eyebrow">SUAS CRIAÇÕES</span><h1>Homebrew</h1><p>Crie conteúdo próprio para usar nas suas histórias.</p></div><button id="addHomebrew" class="button button--primary" type="button">+ Nova criação</button></div>
-                    <div id="homebrewCategories" class="category-tabs" role="group" aria-label="Filtrar homebrew por categoria"></div>
-                    <div class="catalog-toolbar"><label class="search-field"><span aria-hidden="true">⌕</span><input id="searchHomebrew" type="search" placeholder="Buscar criações" aria-label="Buscar criações"></label><span id="homebrewCount" class="catalog-count">0 criações</span></div>
-                    <div id="homebrewList" class="entry-grid"></div>
-                </section>
-            </main>
-        </div>
+                    <aside class="room-side">
+                        <section class="room-panel" aria-labelledby="sharingTitle"><div class="room-panel__heading"><h2 id="sharingTitle">Compartilhamento</h2><span id="roomLiveBadge" class="live-badge">Offline</span></div><p id="roomShareStatus" class="room-hint" role="status">Conferindo conexão…</p><button id="roomLiveToggle" class="button button--primary button--wide" type="button">Iniciar transmissão</button><label class="room-invite-label" for="roomInvite">Convite dos jogadores</label><div class="room-invite"><input id="roomInvite" type="text" readonly placeholder="Disponível quando a mesa estiver ao vivo"><button id="roomCopyInvite" type="button" disabled>Copiar</button></div><p class="room-hint">Na sala, o grupo recebe a cena estática. Abra o tabletop para transmitir os movimentos ao vivo.</p><h3 class="participants-heading">Assistindo <span id="roomViewerCount">0</span></h3><ul id="roomViewerList" class="room-viewers"><li>Ninguém conectado.</li></ul></section>
+                        <section class="room-panel storage-panel"><h2>Onde está salvo?</h2><dl><div><dt>Conta</dt><dd>Nome, descrição e capa da mesa, quando você entra.</dd></div><div><dt>Este aparelho</dt><dd>Cenas, mapas, tokens, documentos e anotações privadas.</dd></div><div><dt>Jogadores</dt><dd>Apenas a visão publicada e os documentos revelados.</dd></div></dl><button id="exportTable" class="button button--secondary button--wide" type="button">↓ Baixar backup da mesa</button><label class="backup-import button button--secondary button--wide">↑ Restaurar backup<input id="importTable" type="file" accept="application/json,.json" hidden></label></section>
+                        <button id="deleteTable" class="danger-link" type="button">Excluir esta mesa</button>
+                    </aside>
+                </div>
+            </section>
+        </main>
+        <footer class="portal-footer"><span>R.E.A.L</span><small>Todo mundo na mesma mesa.</small></footer>
     </div>
+    <div id="portalToast" class="portal-toast" role="status" aria-live="polite" hidden></div>
 
-    <dialog id="campaignDialog" class="editor-dialog" aria-labelledby="campaignDialogTitle">
-        <form id="campaignForm">
-            <header class="editor-dialog__header"><div><span class="eyebrow">CAMPANHAS</span><h2 id="campaignDialogTitle">Nova campanha</h2></div><button id="closeCampaignDialog" class="icon-button" type="button" aria-label="Fechar">×</button></header>
-            <div class="editor-dialog__fields"><label class="form-field">Nome da campanha<input id="campaignNameInput" name="name" maxlength="60" required></label><label class="form-field">Apresentação<textarea id="campaignDescriptionInput" name="description" maxlength="300" rows="4" placeholder="Qual é a premissa da aventura?"></textarea></label></div>
-            <footer class="editor-dialog__footer"><button id="cancelCampaignDialog" class="button button--ghost" type="button">Cancelar</button><button class="button button--primary" type="submit">Salvar campanha</button></footer>
-        </form>
-    </dialog>
-
-    <dialog id="entryDialog" class="editor-dialog" aria-labelledby="entryDialogTitle">
-        <form id="entryForm">
-            <header class="editor-dialog__header"><div><span class="eyebrow">SUA BIBLIOTECA</span><h2 id="entryDialogTitle">Novo registro</h2></div><button id="closeEntryDialog" class="icon-button" type="button" aria-label="Fechar">×</button></header>
-            <div id="entryFields" class="editor-dialog__fields"></div>
-            <footer class="editor-dialog__footer"><button id="deleteEntry" class="button button--danger" type="button" hidden>Excluir</button><button id="cancelEntryDialog" class="button button--ghost" type="button">Cancelar</button><button class="button button--primary" type="submit">Salvar</button></footer>
-        </form>
-    </dialog>
+    <dialog id="tableDialog" class="portal-dialog" aria-labelledby="tableDialogTitle"><form id="tableForm"><header><div><span class="eyebrow">SUAS MESAS</span><h2 id="tableDialogTitle">Criar mesa</h2></div><button id="closeTableDialog" class="dialog-close" type="button" aria-label="Fechar">×</button></header><div class="dialog-fields"><label>Nome da mesa<input id="tableNameInput" name="name" maxlength="60" required></label><label>Descrição <small>(opcional)</small><textarea id="tableDescriptionInput" maxlength="240" rows="3"></textarea></label><label>Capa <small>(opcional · PNG, JPG ou WebP)</small><input id="tableCoverInput" type="file" accept="image/png,image/jpeg,image/webp"></label><label class="cover-remove"><input id="tableRemoveCover" type="checkbox"> Remover capa atual</label><p id="tableFormStatus" class="dialog-message" role="status"></p></div><footer><button id="cancelTableDialog" class="button button--secondary" type="button">Cancelar</button><button id="tableSubmit" class="button button--primary" type="submit">Salvar mesa</button></footer></form></dialog>
+    <dialog id="accessDialog" class="portal-dialog" aria-labelledby="accessDialogTitle"><form id="accessForm"><header><div><span class="eyebrow">ENTRAR COMO JOGADOR</span><h2 id="accessDialogTitle">Acessar mesa</h2></div><button id="closeAccessDialog" class="dialog-close" type="button" aria-label="Fechar">×</button></header><div class="dialog-fields"><label>Convite da mesa<input id="inviteInput" name="invite" inputmode="url" autocomplete="off" placeholder="Cole o link ou o código enviado pelo mestre" required></label><p id="inviteMessage" class="dialog-message" role="status" aria-live="polite"></p><button class="button button--primary button--wide" type="submit">Entrar na mesa</button></div><div id="ownedTablesBlock" class="owned-tables" hidden><span class="eyebrow">OU ABRA UMA MESA SUA</span><div id="ownedTableList"></div></div></form></dialog>
+    <dialog id="sceneDialog" class="portal-dialog" aria-labelledby="sceneDialogTitle"><form id="sceneForm"><header><div><span class="eyebrow">MAPAS E MOMENTOS</span><h2 id="sceneDialogTitle">Nova cena</h2></div><button id="closeSceneDialog" class="dialog-close" type="button" aria-label="Fechar">×</button></header><div class="dialog-fields"><label>Nome da cena<input id="sceneNameInput" maxlength="60" required></label><label id="sceneMapLabel">Mapa PNG <small>(opcional · até 16 MB)</small><input id="sceneMapInput" type="file" accept="image/png"></label><p id="sceneFormStatus" class="dialog-message" role="status"></p></div><footer><button id="cancelSceneDialog" class="button button--secondary" type="button">Cancelar</button><button id="sceneSubmit" class="button button--primary" type="submit">Salvar cena</button></footer></form></dialog>
+    <dialog id="roomDocumentDialog" class="portal-dialog" aria-labelledby="roomDocumentDialogTitle"><form id="roomDocumentForm"><header><h2 id="roomDocumentDialogTitle">Documento</h2><button id="closeRoomDocument" class="dialog-close" type="button" aria-label="Fechar">×</button></header><div class="dialog-fields"><label>Título<input id="roomDocumentTitle" maxlength="80" required></label><label>Tipo<select id="roomDocumentKind"><option value="text">Texto</option><option value="image">Imagem</option></select></label><label id="roomDocumentTextLabel">Conteúdo<textarea id="roomDocumentText" rows="8" maxlength="12000"></textarea></label><label id="roomDocumentImageLabel" hidden>Imagem<input id="roomDocumentImage" type="file" accept="image/png,image/jpeg,image/webp"><small>Ao editar, a imagem atual é mantida se você não escolher outra.</small></label><p id="roomDocumentFormStatus" class="dialog-message" role="status"></p></div><footer><button id="cancelRoomDocument" class="button button--secondary" type="button">Cancelar</button><button id="roomDocumentSubmit" class="button button--primary" type="submit">Salvar documento</button></footer></form></dialog>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.3/dist/umd/supabase.js"></script>
-    <script src="supabase-config.js?v=20260928-online-tabletop"></script>
-    <script src="account-library.js?v=20261005-account"></script>
-    <script src="account.js?v=20261005-account"></script>
-    <script src="campaign.js?v=20261005-account"></script>
+    <script src="assets/js/shared/supabase-config.js?v=20260928-online-tabletop"></script>
+    <script src="assets/js/shared/account-library.js?v=20261005-account"></script>
+    <script src="assets/js/shared/account.js?v=20261012-workspace"></script>
+    <script src="assets/js/shared/table-workspace.js?v=20261012-workspace"></script>
+    <script src="assets/js/portal/table-portal.js?v=20261012-workspace"></script>
+    <script src="assets/js/portal/room-sharing.js?v=20261012-workspace"></script>
+    <script src="assets/js/portal/portal.js?v=20261012-workspace"></script>
 </body>
 </html>

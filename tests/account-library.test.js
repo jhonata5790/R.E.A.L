@@ -1,7 +1,7 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
-const rules = require("../account-library.js");
+const rules = require("../assets/js/shared/account-library.js");
 
 const remote = {
     campaigns: [{ id: "c1", name: "Remota" }],
@@ -26,11 +26,11 @@ assert.equal(rules.decision({ ...local, _account: { userId: "u1", localUpdatedAt
 assert.equal(rules.decision(local, "2026-10-05T10:00:00Z", "outra-conta"), "download");
 
 const root = path.join(__dirname, "..");
-const account = fs.readFileSync(path.join(root, "account.js"), "utf8");
-for (const page of ["index.html", "ficha.html", "personagem.html"]) {
+const account = fs.readFileSync(path.join(root, "assets/js/shared/account.js"), "utf8");
+for (const page of ["index.html"]) {
     const html = fs.readFileSync(path.join(root, page), "utf8");
     assert.match(html, /account\.css/);
-    assert.ok(html.indexOf("account-library.js") < html.indexOf("account.js"));
+    assert.ok(html.indexOf("assets/js/shared/account-library.js") < html.indexOf("assets/js/shared/account.js"));
 }
 assert.match(account, /auth\.signUp/);
 assert.match(account, /auth\.signInWithPassword/);
@@ -38,7 +38,7 @@ assert.match(account, /auth\.resetPasswordForEmail/);
 assert.match(account, /auth\.updateUser/);
 assert.match(account, /from\("user_libraries"\)/);
 assert.match(account, /\.eq\("owner_id", user\.id\)/);
-for (const source of ["campaign.js", "ficha.js", "personagem.js"].map((file) => fs.readFileSync(path.join(root, file), "utf8"))) {
+for (const source of ["assets/js/portal/portal.js"].map((file) => fs.readFileSync(path.join(root, file), "utf8"))) {
     assert.match(source, /markLibraryDirty/);
     assert.match(source, /libraryChanged/);
 }

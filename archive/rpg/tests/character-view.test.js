@@ -290,7 +290,7 @@ inventoryLimitsView.ids.loadBonus.value = "2";
 inventoryLimitsView.ids.loadBonus.handlers.change();
 assert.equal(inventoryLimitsView.ids.inventoryLoad.textContent, "6 / 7 espaços");
 assert.match(inventoryLimitsView.ids.inventoryLimitMessage.textContent, /Inventário dentro dos limites/);
-for (const page of ["index.html", "ficha.html", "personagem.html"]) {
+for (const page of ["ficha.html", "personagem.html"]) {
     const html = fs.readFileSync(path.join(root, page), "utf8");
     assert.match(html, /<strong>R\.E\.A\.L<\/strong><small>RPG entre amigos loucos<\/small>/);
 }
@@ -1240,7 +1240,6 @@ const missing = openCharacter(null);
 assert.equal(missing.ids.missingCharacter.hidden, false);
 assert.equal(missing.ids.characterContent.hidden, true);
 
-assert.match(fs.readFileSync(path.join(root, "campaign.js"), "utf8"), /personagem\.html\?id=/);
 assert.match(fs.readFileSync(path.join(root, "ficha.js"), "utf8"), /if \(persistState\(\)\) location\.href = "personagem\.html\?id="/);
 const css = fs.readFileSync(path.join(root, "personagem.css"), "utf8");
 const html = fs.readFileSync(path.join(root, "personagem.html"), "utf8");

@@ -6,9 +6,9 @@ const vm = require("node:vm");
 const root = path.join(__dirname, "..");
 const html = fs.readFileSync(path.join(root, "mesa.html"), "utf8");
 const guestHtml = fs.readFileSync(path.join(root, "mesa-jogador.html"), "utf8");
-const code = fs.readFileSync(path.join(root, "tabletop-documents.js"), "utf8");
-const masterOnline = fs.readFileSync(path.join(root, "tabletop-online.js"), "utf8");
-const guestOnline = fs.readFileSync(path.join(root, "tabletop-guest.js"), "utf8");
+const code = fs.readFileSync(path.join(root, "assets/js/tabletop/tabletop-documents.js"), "utf8");
+const masterOnline = fs.readFileSync(path.join(root, "assets/js/tabletop/tabletop-online.js"), "utf8");
+const guestOnline = fs.readFileSync(path.join(root, "assets/js/tabletop/tabletop-guest.js"), "utf8");
 
 for (const id of ["hudDocumentForm", "hudDocumentList", "hudDocumentKind", "hudDocumentTitle",
     "hudDocumentText", "hudDocumentImage", "hudDocumentStatus"]) assert.match(html, new RegExp(`id="${id}"`));

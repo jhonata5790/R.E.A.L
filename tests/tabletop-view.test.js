@@ -2,12 +2,12 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
-const view = require("../tabletop-view.js");
+const view = require("../assets/js/tabletop/tabletop-view.js");
 
 const root = path.join(__dirname, "..");
 const html = fs.readFileSync(path.join(root, "mesa.html"), "utf8");
-const script = fs.readFileSync(path.join(root, "script.js"), "utf8");
-const style = fs.readFileSync(path.join(root, "style.css"), "utf8");
+const script = fs.readFileSync(path.join(root, "assets/js/tabletop/tabletop.js"), "utf8");
+const style = fs.readFileSync(path.join(root, "assets/css/tabletop.css"), "utf8");
 
 assert.deepEqual(view.normalize(), { x: -600, y: -337.5, width: 1200, height: 675 });
 assert.deepEqual(view.normalize({ x: 30, y: -20, width: 1600, height: 1 }), { x: 30, y: -20, width: 1600, height: 900 });
@@ -43,7 +43,7 @@ assert.match(style, /@media \(prefers-reduced-motion: reduce\)/);
     assert.equal(toolbar.hidden, false);
     assert.equal(toggle.attributes["aria-expanded"], "true");
 }
-assert.match(html, /<script src="tabletop-view\.js[^"\n]*"><\/script>/);
+assert.match(html, /<script src="assets\/js\/tabletop\/tabletop-view\.js[^"\n]*"><\/script>/);
 assert.match(script, /playerView: \{ \.\.\.playerView \}/);
 assert.match(script, /Object\.assign\(playerView, VIEW_RULES\.normalize\(data\.playerView\)\)/);
 assert.match(script, /VIEW_RULES\.publishedTokens\(tokens\)/);
@@ -56,6 +56,6 @@ assert.match(script, /drawTokenSelections\(\)/);
 assert.match(html, /id="selectAllTokens"/);
 assert.match(html, /id="clearTokenSelection"/);
 assert.match(html, /tabletop-selection\.js/);
-assert.match(script, /if \(previewDialog\.open \|\| playerStream\) drawPlayerPreview\(\)/);
+assert.match(script, /if \(previewDialog\.open \|\| playerStream\) \{[\s\S]*?drawPlayerPreview\(\);[\s\S]*?requestPlayerStreamFrame\(\);[\s\S]*?\}/);
 assert.match(script, /const detailScale = width \/ 960/);
 console.log("Tabletop: visão independente, filtro de tokens e persistência da área: OK");

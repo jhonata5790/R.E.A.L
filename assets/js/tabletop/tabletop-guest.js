@@ -6,6 +6,7 @@
     const frame = document.getElementById("guestFrame");
     const video = document.getElementById("guestVideo");
     const waiting = document.getElementById("guestWaiting");
+    const economyButton = document.getElementById("guestEconomy");
     const documentDialog = document.getElementById("guestDocument");
     const documentOpen = document.getElementById("guestDocumentOpen");
     const documentHandle = document.getElementById("guestDocumentHandle");
@@ -13,6 +14,11 @@
     const documentText = document.getElementById("guestDocumentText");
     const documentPages = document.getElementById("guestDocumentPages");
     const config = window.REAL_SUPABASE_CONFIG;
+    const performanceRules = window.REAL_TABLETOP_PERFORMANCE || {
+        prefersEconomy: () => true,
+        refreshDelay: () => 10000,
+        fallbackRequest: (code, knownPublishedAt) => ({ inviteCode: code, ...(knownPublishedAt ? { knownPublishedAt } : {}) })
+    };
     const inviteCode = new URLSearchParams(location.hash.slice(1)).get("convite");
     const validCode = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(inviteCode || "");
     const iceServers = [{ urls: "stun:stun.l.google.com:19302" }];
@@ -32,6 +38,17 @@
     let draggingDocument = null;
     let documentPage = 0;
     let documentPageCount = 1;
+    let refreshTimer = null;
+    let joinTimer = null;
+    let refreshFailures = 0;
+    let lastJoinRequestAt = 0;
+    let economyMode = performanceRules.prefersEconomy({
+        stored: (() => { try { return localStorage.getItem("real-tabletop-economy"); } catch { return null; } })(),
+        saveData: typeof navigator !== "undefined" && navigator.connection?.saveData === true,
+        effectiveType: typeof navigator !== "undefined" ? navigator.connection?.effectiveType : "",
+        narrow: window.matchMedia?.("(max-width: 720px)")?.matches === true,
+        coarse: window.matchMedia?.("(pointer: coarse)")?.matches === true
+    });
 
     function paginateDocument() {
         if (!hasDocument || documentText.hidden) { documentPages.hidden = true; return; }
@@ -221,6 +238,7 @@
     function say(message) { status.textContent = message; }
 
     function fallbackMessage() {
+        if (economyMode) return "Modo econômico · a imagem atualiza quando a mesa mudar";
         return typeof RTCPeerConnection === "undefined" || Date.now() - liveSince > 15000
             ? "Visão por imagem · tentando conectar o vídeo ao vivo…"
             : "Mesa ativa · conectando vídeo ao vivo…";
@@ -243,6 +261,22 @@
         showFallback();
     }
 
+    function showEconomyMode() {
+        economyButton.setAttribute("aria-pressed", String(economyMode));
+        economyButton.querySelector("strong").textContent = economyMode ? "Economia ativa" : "Vídeo ao vivo";
+        economyButton.querySelector("small").textContent = economyMode ? "Poupa dados e bateria" : "Mais movimento";
+    }
+
+    function setEconomyMode(enabled) {
+        economyMode = Boolean(enabled);
+        try { localStorage.setItem("real-tabletop-economy", economyMode ? "on" : "off"); }
+        catch { /* A preferência vale somente nesta visita. */ }
+        showEconomyMode();
+        if (economyMode) closePeer();
+        else requestJoin(true);
+        scheduleJoin();
+    }
+
     function showWaiting(message) {
         knownLive = false;
         documentRequested = false;
@@ -262,10 +296,23 @@
         catch { /* A imagem de reserva segue disponível. */ }
     }
 
-    function requestJoin() {
+    function requestJoin(force = false) {
+        if (economyMode || document.visibilityState === "hidden" || peer) return;
+        const now = Date.now();
+        if (!force && now - lastJoinRequestAt < 8000) return;
         if (knownLive && channelReady && !videoReady && typeof RTCPeerConnection !== "undefined") {
+            lastJoinRequestAt = now;
             signal({ kind: "join", viewerId });
         }
+    }
+
+    function scheduleJoin() {
+        clearTimeout(joinTimer);
+        if (economyMode || document.visibilityState === "hidden") return;
+        joinTimer = setTimeout(() => {
+            requestJoin();
+            scheduleJoin();
+        }, 8000);
     }
 
     async function updatePresence(force = false) {
@@ -294,6 +341,7 @@
             showWaiting("Transmissão encerrada pelo mestre.");
             return;
         }
+        if (economyMode || document.visibilityState === "hidden") return;
         if (payload.viewerId !== viewerId || typeof RTCPeerConnection === "undefined") return;
         if (payload.kind === "candidate" && payload.candidate) {
             if (peer?.sessionId === payload.sessionId) await addCandidate(payload.candidate);
@@ -341,6 +389,7 @@
     }
 
     video.addEventListener("playing", () => {
+        if (economyMode || document.visibilityState === "hidden") { closePeer(); return; }
         videoReady = true;
         video.hidden = false;
         frame.hidden = true;
@@ -351,60 +400,89 @@
     if (!validCode) { showWaiting("Convite ausente ou inválido."); return; }
     if (!config) { showWaiting("A conexão online não está configurada."); return; }
 
+    function scheduleRefresh(delay) {
+        clearTimeout(refreshTimer);
+        if (document.visibilityState === "hidden") return;
+        refreshTimer = setTimeout(refresh, delay ?? performanceRules.refreshDelay({
+            channelReady, knownLive, failures: refreshFailures
+        }));
+    }
+
     async function refresh() {
-        if (busy || document.visibilityState === "hidden"
+        if (busy) { scheduleRefresh(700); return; }
+        if (document.visibilityState === "hidden"
             || (window.REAL_VISITOR_NAME && !window.REAL_VISITOR_NAME.getName())) return;
         busy = true;
         try {
             const response = await fetch(`${config.url}/functions/v1/tabletop-guest-view`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json", apikey: config.publishableKey },
-                body: JSON.stringify({ inviteCode }),
+                body: JSON.stringify(performanceRules.fallbackRequest(inviteCode, lastPublishedAt)),
                 cache: "no-store"
             });
             if (response.status === 404) { showWaiting("Convite não encontrado. Peça um novo link ao mestre."); return; }
             if (!response.ok) throw new Error("Conexão indisponível");
             const view = await response.json();
-            if (!view.live || !view.frame) {
+            refreshFailures = 0;
+            if (!view.live) {
                 lastPublishedAt = null;
                 showWaiting("Aguardando o mestre iniciar a transmissão…");
                 return;
             }
             if (!knownLive) liveSince = Date.now();
             knownLive = true;
-            if (view.publishedAt !== lastPublishedAt) {
+            if (!view.unchanged && typeof view.frame === "string" && view.frame) {
                 frame.src = view.frame;
                 lastPublishedAt = view.publishedAt;
             }
-            waiting.hidden = true;
-            frame.hidden = videoReady;
+            waiting.hidden = !frame.src;
+            frame.hidden = videoReady || !frame.src;
             if (!videoReady) say(fallbackMessage());
             updatePresence();
             requestJoin();
             requestDocument();
-        } catch { say("Conexão interrompida. Tentando novamente…"); }
-        finally { busy = false; }
+        } catch {
+            refreshFailures = Math.min(3, refreshFailures + 1);
+            say("Conexão interrompida. Tentando novamente…");
+        } finally {
+            busy = false;
+            scheduleRefresh();
+        }
     }
 
     if (window.supabase?.createClient) {
         const client = window.supabase.createClient(config.url, config.publishableKey, { auth: { persistSession: false } });
         channel = client.channel(`real-tabletop:${inviteCode}`)
-            .on("broadcast", { event: "changed" }, refresh)
+            .on("broadcast", { event: "changed" }, () => refresh())
             .on("broadcast", { event: "rtc" }, handleSignal)
             .on("broadcast", { event: "document" }, handleDocument)
             .subscribe((state) => {
                 channelReady = state === "SUBSCRIBED";
                 if (!channelReady) { presenceTracked = false; documentRequested = false; }
-                if (channelReady) { requestJoin(); updatePresence(); requestDocument(); }
+                if (channelReady) { requestJoin(); updatePresence(); requestDocument(); scheduleRefresh(); }
             });
     }
+    economyButton.addEventListener("click", () => setEconomyMode(!economyMode));
+    showEconomyMode();
     window.REAL_VISITOR_NAME?.ready.then(() => { refresh(); updatePresence(); });
     window.addEventListener("real:visitor-name-changed", () => { refresh(); updatePresence(true); });
     refresh();
-    setInterval(refresh, 4000);
-    setInterval(requestJoin, 5000);
-    document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") { refresh(); requestJoin(); } });
+    scheduleJoin();
+    document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "hidden") {
+            clearTimeout(refreshTimer);
+            clearTimeout(joinTimer);
+            if (presenceTracked && channel) { presenceTracked = false; channel.untrack().catch(() => {}); }
+            closePeer();
+            return;
+        }
+        refresh();
+        requestJoin(true);
+        scheduleJoin();
+    });
     window.addEventListener("pagehide", () => {
+        clearTimeout(refreshTimer);
+        clearTimeout(joinTimer);
         if (presenceTracked && channel) channel.untrack().catch(() => {});
         closePeer();
     });

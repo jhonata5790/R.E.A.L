@@ -5,7 +5,7 @@ const vm = require("node:vm");
 
 const root = path.join(__dirname, "..");
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
-for (const page of ["index.html", "ficha.html", "personagem.html", "mesa.html", "mesa-jogador.html"]) {
+for (const page of ["mesa.html", "mesa-jogador.html"]) {
     const html = read(page);
     assert.match(html, /visitor-name\.css\?v=/, `${page}: estilo do nome`);
     assert.match(html, /visitor-name\.js\?v=/, `${page}: entrada direta pede nome`);
@@ -30,7 +30,7 @@ function loadIdentity() {
         createElement(tag) { return tag === "dialog" ? dialog : { addEventListener() {}, textContent: "" }; } };
     const window = { dispatchEvent(event) { listeners.lastEvent = event; } };
     const localStorage = { getItem: (key) => saved.get(key) ?? null, setItem: (key, value) => saved.set(key, value) };
-    vm.runInNewContext(read("visitor-name.js"), { document, window, localStorage,
+    vm.runInNewContext(read("assets/js/shared/visitor-name.js"), { document, window, localStorage,
         CustomEvent: class { constructor(type, options) { this.type = type; this.detail = options.detail; } } });
     return { window, input, dialog, listeners, classes };
 }

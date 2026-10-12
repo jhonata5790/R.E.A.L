@@ -1,0 +1,13 @@
+{
+  "name": "real-tabletop",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Portal de mesas e tabletop R.E.A.L",
+  "scripts": {
+    "check": "node scripts/check-site.js",
+    "test": "node scripts/run-tests.js",
+    "test:archive": "node scripts/run-tests.js archive/rpg/tests",
+    "build": "node scripts/build-site.js"
+  },
+  "engines": { "node": ">=22" }
+}

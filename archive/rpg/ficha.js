@@ -36,7 +36,7 @@ state.characters = Array.isArray(state.characters) ? state.characters : [];
 state.homebrew = Array.isArray(state.homebrew) ? state.homebrew : [];
 const editingId = new URLSearchParams(location.search).get("id");
 const existing = editingId ? state.characters.find((character) => character.id === editingId) : null;
-if (editingId && !existing) location.replace("index.html#personagens");
+if (editingId && !existing) location.replace("../../index.html#inicio");
 
 function normalizedChoice(value, choices) {
     const text = String(value || "").toLocaleLowerCase("pt-BR");
@@ -457,7 +457,7 @@ function deleteCharacter() {
     state.campaigns.forEach((campaign) => {
         campaign.characters = (campaign.characters || []).filter((id) => id !== existing.id);
     });
-    if (persistState()) location.href = "index.html#personagens";
+    if (persistState()) location.href = "../../index.html#inicio";
 }
 
 if (existing) {

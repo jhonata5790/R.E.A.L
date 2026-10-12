@@ -9,9 +9,9 @@
 
     <title>Mesa tática | R.E.A.L</title>
 
-    <link rel="stylesheet" href="style.css?v=20261005-multi-select">
-    <link rel="stylesheet" href="visitor-name.css?v=20260928-visitor">
-    <script src="visitor-name.js?v=20260928-visitor"></script>
+    <link rel="stylesheet" href="assets/css/tabletop.css?v=20261012-workspace">
+    <link rel="stylesheet" href="assets/css/visitor-name.css?v=20260928-visitor">
+    <script src="assets/js/shared/visitor-name.js?v=20260928-visitor"></script>
 </head>
 
 <body class="tabletop-page">
@@ -19,6 +19,8 @@
     <main id="tabletop">
 
         <canvas id="gameCanvas" tabindex="0" aria-label="Mapa da mesa"></canvas>
+        <header class="tabletop-topbar"><div class="tabletop-topbar__identity"><strong id="topbarTableName">Minha mesa</strong><label><span class="sr-only">Cena em uso</span><select id="activeSceneSelect" aria-label="Trocar de cena"><option>Carregando cenas…</option></select></label></div><div class="tabletop-states"><span id="stateRuler" hidden>Régua ativa</span><span id="stateSnap" hidden>Encaixe ativo</span><span id="stateFollow" hidden>Visão segue o mouse</span></div><div class="tabletop-topbar__actions"><button id="topbarFollow" type="button" title="Posicionar visão do jogador (Espaço)">Visão do jogador</button><button id="topbarTransmission" type="button"><span id="stateLive">○ Offline</span></button></div></header>
+        <section id="tokenQuickActions" class="token-quick-actions" aria-label="Ações da seleção" hidden><strong id="tokenQuickName">Token selecionado</strong><div><button id="quickTokenFocus" type="button" title="Enquadrar seleção (F)">Enquadrar</button><button id="quickTokenVisibility" type="button" title="Ocultar ou revelar (H)">Ocultar</button><button id="quickTokenDuplicate" type="button">Duplicar</button><button id="quickTokenEdit" type="button">Detalhes</button><button id="quickTokenDelete" class="is-danger" type="button">Remover</button></div></section>
 
         <div id="emptyTabletop" class="empty-tabletop">
             <span class="empty-tabletop__mark" aria-hidden="true">✦</span>
@@ -46,19 +48,10 @@
         <dialog id="hudMenu" class="hud-menu" aria-labelledby="hudCampaignName">
             <div class="hud-menu__shell">
                 <header class="hud-menu__header">
-                    <div><span>R.E.A.L · CAMPANHA</span><h2 id="hudCampaignName">Mesa</h2></div>
+                    <div><span>R.E.A.L · TABLETOP</span><h2 id="hudCampaignName">Mesa</h2></div>
                     <button id="closeHudMenu" type="button" aria-label="Fechar menu da mesa">×</button>
                 </header>
-                <nav class="hud-menu__nav" aria-label="Seções da mesa">
-                    <button type="button" data-hud-section="shield" aria-controls="hudShield" aria-expanded="false">Escudo do mestre <span aria-hidden="true">›</span></button>
-                    <button type="button" data-hud-section="documents" aria-controls="hudDocuments" aria-expanded="false">Documentos <span aria-hidden="true">›</span></button>
-                </nav>
-                <section id="hudShield" class="hud-menu__section" aria-label="Escudo do mestre" hidden>
-                    <h3>Fichas da campanha</h3>
-                    <ul id="hudCharacterList"></ul>
-                    <p id="hudCharacterEmpty" hidden>Nenhuma ficha vinculada a esta campanha.</p>
-                </section>
-                <section id="hudDocuments" class="hud-menu__section" aria-label="Documentos da campanha" hidden>
+                <section id="hudDocuments" class="hud-menu__section" aria-label="Documentos da mesa">
                     <h3>Documentos do mestre</h3>
                     <p class="hud-menu__hint">Prepare pistas aqui. Só o documento revelado aparece para quem está assistindo à mesa.</p>
                     <p id="hudDocumentStatus" class="hud-documents__status" role="status" aria-live="polite"></p>
@@ -73,8 +66,8 @@
                         <p id="hudDocumentImageHint" class="hud-menu__hint" hidden></p>
                         <div class="hud-documents__actions"><button id="hudDocumentSave" type="submit">Salvar documento</button><button id="hudDocumentCancel" type="button" hidden>Cancelar edição</button></div>
                     </form>
-                    <details class="hud-documents__notes"><summary>Anotações privadas da campanha</summary><p id="hudCampaignNotes"></p></details>
-                    <a id="hudCampaignLink" href="index.html#campanhas">Abrir campanha</a>
+                    <a id="hudCampaignLink" href="index.html#inicio">Abrir sala da mesa</a>
+                    <details class="hud-documents__notes"><summary>Anotações privadas</summary><p id="hudPrivateNotes"></p></details>
                 </section>
                 <footer class="hud-menu__footer"><a class="campaign-return" href="index.html">Sair da mesa</a></footer>
             </div>
@@ -89,6 +82,33 @@
         <div id="saveStatus" class="save-status" aria-live="polite">
             Mesa pronta
         </div>
+        <div id="shortcutStatus" class="shortcut-status" role="status" aria-live="polite" hidden></div>
+
+        <dialog id="shortcutHelp" class="shortcut-help" aria-labelledby="shortcutHelpTitle">
+            <header><div><small>CONTROLES DA MESA</small><h2 id="shortcutHelpTitle">Atalhos</h2></div><button id="closeShortcutHelp" type="button" aria-label="Fechar atalhos">×</button></header>
+            <p>Atalhos ficam pausados enquanto você digita ou usa uma janela. No Mac, use ⌘ no lugar de Ctrl.</p>
+            <dl>
+                <div><dt><kbd>Espaço</kbd></dt><dd>Visão do jogador segue o mouse. Toque de novo para fixar.</dd></div>
+                <div><dt><kbd>Shift</kbd> + <kbd>Espaço</kbd></dt><dd>Centralizar a visão do jogador nos tokens selecionados.</dd></div>
+                <div><dt><kbd>F</kbd></dt><dd>Enquadrar a seleção na câmera do mestre; sem seleção, enquadrar o mapa.</dd></div>
+                <div><dt>Botão do meio + arrastar</dt><dd>Mover a câmera do mestre. O botão direito também funciona.</dd></div>
+                <div><dt>Roda do mouse</dt><dd>Aproximar ou afastar o mapa, mantendo o ponto sob o mouse.</dd></div>
+                <div><dt><kbd>R</kbd></dt><dd>Ativar ou desativar a régua.</dd></div>
+                <div><dt><kbd>G</kbd></dt><dd>Mostrar ou esconder a grade.</dd></div>
+                <div><dt><kbd>Shift</kbd> + <kbd>G</kbd></dt><dd>Ativar ou desativar o encaixe dos tokens na grade.</dd></div>
+                <div><dt><kbd>H</kbd></dt><dd>Ocultar ou revelar a seleção para os jogadores.</dd></div>
+                <div><dt><kbd>Shift</kbd> + <kbd>H</kbd></dt><dd>Mostrar ou esconder a interface do mestre.</dd></div>
+                <div><dt><kbd>Ctrl</kbd> + <kbd>C</kbd> / <kbd>V</kbd></dt><dd>Copiar tokens desta mesa e colar no mouse, mantendo o grupo e suas configurações.</dd></div>
+                <div><dt><kbd>Ctrl</kbd> + <kbd>Z</kbd></dt><dd>Desfazer a última alteração da cena.</dd></div>
+                <div><dt><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>Z</kbd></dt><dd>Refazer a alteração. Histórico de até 50 ações nesta visita.</dd></div>
+                <div><dt><kbd>Esc</kbd></dt><dd>Cancelar o posicionamento do jogador, encerrar a ferramenta ou limpar a seleção.</dd></div>
+                <div><dt><kbd>Ctrl</kbd> + <kbd>A</kbd></dt><dd>Selecionar todos os tokens.</dd></div>
+                <div><dt><kbd>Ctrl</kbd> + <kbd>D</kbd></dt><dd>Duplicar os tokens selecionados.</dd></div>
+                <div><dt><kbd>Delete</kbd></dt><dd>Remover os tokens selecionados. Ctrl + Z recupera.</dd></div>
+                <div><dt><kbd>Tab</kbd></dt><dd>Ver os espectadores enquanto segura, com o mapa em foco.</dd></div>
+                <div><dt><kbd>?</kbd></dt><dd>Abrir esta lista.</dd></div>
+            </dl>
+        </dialog>
 
         <section
             id="gridPanel"
@@ -168,6 +188,10 @@
             <label class="settings-toggle" for="gridVisible">
                 <span>Mostrar grade</span>
                 <input id="gridVisible" type="checkbox">
+            </label>
+            <label class="settings-toggle" for="gridSnap">
+                <span>Encaixar tokens na grade <small>Shift + G</small></span>
+                <input id="gridSnap" type="checkbox">
             </label>
 
             <div class="settings-field">
@@ -382,7 +406,7 @@
             <header class="settings-panel__header">
                 <div>
                     <p class="settings-panel__eyebrow">SESSÃO</p>
-                    <h2>Salvar mesa</h2>
+                    <h2>Salvamento da cena</h2>
                 </div>
                 <button
                     id="closeSessionPanel"
@@ -399,14 +423,14 @@
             <div class="session-actions">
                 <button id="saveSession" type="button">Salvar agora</button>
                 <button id="loadSession" type="button">Carregar última mesa</button>
-                <button id="newSession" class="danger-button" type="button">Nova mesa</button>
+                <button id="newSession" class="danger-button" type="button">Limpar cena atual</button>
             </div>
 
             <p id="sessionDetails" class="settings-hint">
                 Nenhuma alteração pendente.
             </p>
             <p class="settings-hint">
-                Pressione <kbd>H</kbd> para ocultar ou mostrar a interface da mesa.
+                Pressione <kbd>Shift</kbd> + <kbd>H</kbd> para ocultar ou mostrar a interface da mesa.
             </p>
         </section>
 
@@ -429,6 +453,9 @@
                 <button type="button" data-player-dx="50" aria-label="Mover área dos jogadores para a direita">→</button>
             </div>
             <button id="openPlayerPreview" class="player-view-panel__preview" type="button">Ver como jogador</button>
+        </section>
+        <section id="scenesPanel" class="settings-panel scenes-panel" aria-label="Cenas da mesa" hidden><header class="settings-panel__header"><div><p class="settings-panel__eyebrow">CENA</p><h2>Cenas da mesa</h2></div><button id="closeScenesPanel" class="settings-panel__close" type="button" aria-label="Fechar cenas">×</button></header><p id="mainSceneStatus" class="settings-hint" role="status">Cada cena guarda seu mapa, tokens e câmeras neste aparelho.</p><div id="mainSceneList" class="main-scene-list"></div><div class="main-scene-rename"><label>Nome da cena atual<input id="mainSceneRename" maxlength="60"></label><button id="renameMainScene" type="button">Renomear</button></div><form id="mainSceneForm" class="main-scene-form"><h3>Nova cena</h3><label>Nome<input id="mainSceneName" maxlength="60" required></label><label>Mapa PNG (opcional)<input id="mainSceneMap" type="file" accept="image/png"></label><button id="createMainScene" type="submit">Criar cena</button></form></section>
+        <section id="transmissionPanel" class="settings-panel player-view-panel" aria-label="Transmissão da mesa" hidden><header class="settings-panel__header"><div><p class="settings-panel__eyebrow">TRANSMISSÃO</p><h2>Chame o grupo</h2></div><button id="closeTransmissionPanel" class="settings-panel__close" type="button" aria-label="Fechar transmissão">×</button></header>
             <div class="tabletop-online" aria-labelledby="onlineTitle">
                 <h3 id="onlineTitle">Mesa online</h3>
                 <p id="onlineStatus" class="tabletop-online__status" role="status">Conectando…</p>
@@ -456,7 +483,7 @@
 
         <dialog id="playerPreview" class="player-preview" aria-labelledby="playerPreviewTitle">
             <div class="player-preview__header"><div><span>PRÉVIA LOCAL</span><h2 id="playerPreviewTitle">Visão dos jogadores</h2></div><button id="closePlayerPreview" type="button" aria-label="Fechar prévia dos jogadores">×</button></div>
-            <canvas id="playerPreviewCanvas" width="1920" height="1080" aria-label="Prévia da área visível aos jogadores"></canvas>
+            <canvas id="playerPreviewCanvas" width="1280" height="720" aria-label="Prévia da área visível aos jogadores"></canvas>
             <p>Somente a área do retângulo e os tokens publicados aparecem aqui. Na mesa online, esta é a visão enviada aos jogadores.</p>
         </dialog>
 
@@ -470,6 +497,11 @@
             id="toolbar"
             aria-label="Ferramentas da mesa"
         >
+            <button id="toolScenes" type="button" title="Cenas da mesa" aria-label="Cenas da mesa" aria-controls="scenesPanel" aria-expanded="false">▤</button>
+            <button id="toolTransmission" type="button" title="Transmissão e convite" aria-label="Transmissão e convite" aria-controls="transmissionPanel" aria-expanded="false">◉</button>
+            <button id="undoScene" type="button" title="Desfazer (Ctrl + Z)" aria-label="Desfazer alteração da cena" disabled>↶</button>
+            <button id="redoScene" type="button" title="Refazer (Ctrl + Shift + Z)" aria-label="Refazer alteração da cena" disabled>↷</button>
+            <button id="openShortcutHelp" type="button" title="Atalhos (?)" aria-label="Consultar atalhos" aria-haspopup="dialog" aria-controls="shortcutHelp">?</button>
 
             <button
                 id="toolMove"
@@ -576,14 +608,17 @@
 
     </main>
 
-    <script src="tabletop-view.js?v=20260927-player-view"></script>
-    <script src="tabletop-selection.js?v=20261005-multi-select"></script>
-    <script src="script.js?v=20261005-multi-select"></script>
+    <script src="assets/js/shared/table-workspace.js?v=20261012-workspace"></script>
+    <script src="assets/js/tabletop/tabletop-view.js?v=20260927-player-view"></script>
+    <script src="assets/js/tabletop/tabletop-selection.js?v=20261005-multi-select"></script>
+    <script src="assets/js/tabletop/tabletop-shortcuts.js?v=20261012-shortcuts"></script>
+    <script src="assets/js/tabletop/tabletop.js?v=20261012-workspace"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.3/dist/umd/supabase.js"></script>
-    <script src="supabase-config.js?v=20260928-online-tabletop"></script>
-    <script src="tabletop-online.js?v=20260929-documents"></script>
-    <script src="tabletop-documents.js?v=20260929-documents"></script>
-    <script src="tabletop-hud.js?v=20260928-hud-menu"></script>
+    <script src="assets/js/shared/supabase-config.js?v=20260928-online-tabletop"></script>
+    <script src="assets/js/tabletop/tabletop-online.js?v=20261012-workspace"></script>
+    <script src="assets/js/tabletop/tabletop-documents.js?v=20260929-documents"></script>
+    <script src="assets/js/tabletop/tabletop-hud.js?v=20261012-table-portal"></script>
+    <script src="assets/js/tabletop/tabletop-workspace.js?v=20261012-workspace"></script>
 
 </body>
 </html>

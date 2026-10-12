@@ -1,1 +1,4 @@
-.openai/
+.publish/
+outputs/
+node_modules/
+.preview-*

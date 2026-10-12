@@ -6,41 +6,52 @@ const vm = require("node:vm");
 const root = path.join(__dirname, "..");
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 const masterHtml = read("mesa.html");
-const masterCode = read("tabletop-online.js");
-const tabletopCode = read("script.js");
+const masterCode = read("assets/js/tabletop/tabletop-online.js");
+const tabletopCode = read("assets/js/tabletop/tabletop.js");
 const guestHtml = read("mesa-jogador.html");
-const guestCode = read("tabletop-guest.js");
+const performanceCode = read("assets/js/tabletop/tabletop-performance.js");
+const guestCode = read("assets/js/tabletop/tabletop-guest.js");
 const edgeCode = read("supabase/functions/tabletop-guest-view/index.ts");
-const configCode = read("supabase-config.js");
+const configCode = read("assets/js/shared/supabase-config.js");
 
 assert.match(masterHtml, /id="onlineAuthForm"/);
 assert.match(masterHtml, /id="onlineToggle"/);
 assert.match(masterHtml, /id="onlineInvite"/);
 assert.match(masterHtml, /id="onlineViewerList"/);
 assert.match(masterHtml, /id="mobileViewerCount"/);
-assert.match(masterHtml, /id="playerPreviewCanvas" width="1920" height="1080"/);
+assert.match(masterHtml, /id="playerPreviewCanvas" width="1280" height="720"/);
 assert.match(masterCode, /auth\.signInWithPassword/);
 assert.match(masterCode, /auth\.signUp/);
 assert.match(masterCode, /published_frame: frame/);
 assert.match(masterCode, /new RTCPeerConnection/);
 assert.match(masterCode, /kind: "offer"/);
+assert.match(masterCode, /maxBitrate = 420000/);
+assert.match(masterCode, /maxFramerate = 8/);
 assert.match(masterCode, /auth\.signOut/);
 assert.match(masterCode, /\.update\(\{ is_live: false, published_frame: null/);
 assert.match(tabletopCode, /capturePlayerFrame\(\)/);
-assert.match(tabletopCode, /previewCanvas\.captureStream\(24\)/);
-assert.match(tabletopCode, /track\.contentHint = "detail"/);
-assert.match(tabletopCode, /published\.width = 800/);
-assert.match(tabletopCode, /published\.height = 450/);
+assert.match(tabletopCode, /previewCanvas\.captureStream\(0\)/);
+assert.match(tabletopCode, /previewCanvas\.captureStream\(8\)/);
+assert.match(tabletopCode, /playerStreamTrack\.requestFrame/);
+assert.match(tabletopCode, /playerStreamTrack\.contentHint = "detail"/);
+assert.match(tabletopCode, /published\.width = 720/);
+assert.match(tabletopCode, /published\.height = 405/);
 assert.match(tabletopCode, /previewDialog\.open \|\| playerStream/);
 assert.match(tabletopCode, /VIEW_RULES\.publishedTokens\(tokens\)/);
 assert.match(tabletopCode, /window\.dispatchEvent\(new Event\("real:tabletop-changed"\)\)/);
 assert.match(guestHtml, /id="guestFrame"/);
 assert.match(guestHtml, /id="guestVideo"/);
+assert.match(guestHtml, /id="guestEconomy"/);
+assert.match(guestHtml, /tabletop-performance\.js/);
 assert.match(guestCode, /kind: "answer"/);
+assert.match(guestCode, /knownPublishedAt/);
+assert.doesNotMatch(guestCode, /setInterval\(refresh/);
 assert.match(guestCode, /channel\.track\(\{ role: "viewer", name \}\)/);
 assert.match(masterCode, /\.on\("presence", \{ event: "sync" \}, showViewers\)/);
 assert.doesNotMatch(guestHtml, /id="(?:gameCanvas|toolToken|toolMap|tokenLibrary)"/);
 assert.match(edgeCode, /select", "is_live,published_frame,published_at"/);
+assert.match(edgeCode, /unchanged/);
+assert.match(edgeCode, /knownPublishedAt/);
 assert.doesNotMatch(edgeCode, /select", "\*"/);
 assert.match(edgeCode, /SUPABASE_SECRET_KEYS/);
 assert.match(configCode, /sb_publishable_/);
@@ -80,6 +91,14 @@ function guestDocumentUi() {
     } };
 }
 
+function economyControl() {
+    const strong = { textContent: "" };
+    const small = { textContent: "" };
+    return { attributes: {}, handlers: {}, setAttribute(name, value) { this.attributes[name] = value; },
+        querySelector(selector) { return selector === "strong" ? strong : small; },
+        addEventListener(name, fn) { this.handlers[name] = fn; } };
+}
+
 async function runGuest(hash, response, visitorName) {
     const ui = guestDocumentUi();
     const ids = {
@@ -87,6 +106,7 @@ async function runGuest(hash, response, visitorName) {
         guestFrame: { hidden: true, src: "", removeAttribute(name) { if (name === "src") this.src = ""; } },
         guestVideo: { hidden: true, srcObject: null, addEventListener() {} },
         guestWaiting: { hidden: false },
+        guestEconomy: economyControl(),
         ...ui.ids
     };
     const calls = [];
@@ -99,9 +119,10 @@ async function runGuest(hash, response, visitorName) {
             addEventListener() {} },
         crypto: { randomUUID: () => "11111111-2222-4333-8444-555555555555" },
         URLSearchParams,
-        setInterval() {},
+        setInterval() {}, setTimeout() {}, clearTimeout() {},
         fetch: async (url, options) => { calls.push({ url, options }); return response; }
     };
+    vm.runInNewContext(performanceCode, context);
     vm.runInNewContext(guestCode, context);
     await new Promise((resolve) => setImmediate(resolve));
     return { ids, calls };
@@ -173,6 +194,7 @@ async function runLive() {
         guestVideo: { hidden: true, srcObject: null, addEventListener(name, fn) { videoHandlers[name] = fn; },
             play() { videoHandlers.playing(); return Promise.resolve(); } },
         guestWaiting: { hidden: false },
+        guestEconomy: economyControl(),
         ...ui.ids
     };
     const masterIds = Object.fromEntries([
@@ -241,7 +263,9 @@ async function runLive() {
     const shared = {
         RTCPeerConnection: FakePeerConnection,
         crypto: { randomUUID: () => ids.shift() || "cccccccc-cccc-4ccc-8ccc-cccccccccccc" },
-        URL, URLSearchParams, Event, setTimeout, clearTimeout, setInterval() {}
+        URL, URLSearchParams, Event,
+        setTimeout(fn, delay) { const timer = setTimeout(fn, delay); timer.unref?.(); return timer; },
+        clearTimeout, setInterval() {}
     };
     const masterContext = {
         ...shared,
@@ -266,6 +290,7 @@ async function runLive() {
         fetch: async () => ({ ok: true, status: 200, json: async () => ({ live: room.is_live,
             frame: room.is_live ? "data:image/jpeg;base64,abc" : null, publishedAt: room.published_at }) })
     };
+    vm.runInNewContext(performanceCode, guestContext);
     vm.runInNewContext(guestCode, guestContext);
     await new Promise((resolve) => setTimeout(resolve, 30));
     assert.equal(masterIds.onlineViewerCount.textContent, "(1)");

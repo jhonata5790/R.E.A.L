@@ -1,4 +1,4 @@
-// Conta R.E.A.L: autenticação e sincronização da biblioteca local com Supabase.
+// Conta R.E.A.L: autenticação e sincronização das mesas locais com Supabase.
 (function () {
     "use strict";
 
@@ -18,6 +18,8 @@
         ready: Promise.resolve(null),
         isSignedIn: () => Boolean(user),
         currentUser: () => user,
+        client: () => client,
+        open: openDialog,
         markLibraryDirty,
         libraryChanged: queueSync,
         syncNow: () => syncLibrary()
@@ -52,6 +54,7 @@
         };
         writeLibrary(library);
         writeLibrary(library, USER_CACHE_PREFIX + user.id);
+        window.dispatchEvent(new Event("real:library-updated"));
         return library;
     }
 
@@ -120,12 +123,12 @@
                     stampSynced(local, remote.updated_at);
                 }
             }
-            setSyncState("Tudo salvo na sua conta");
+            setSyncState("Lista de mesas salva na conta");
             renderAccount();
             if (shouldReload && options.reload !== false) location.reload();
             return true;
         } catch (error) {
-            console.error("Falha ao sincronizar a biblioteca", error);
+            console.error("Falha ao sincronizar as mesas", error);
             setSyncState("Salvo neste aparelho · sincronização pendente");
             setMessage("Não foi possível sincronizar agora. Seus dados continuam seguros neste aparelho.", "error");
             return false;
@@ -156,7 +159,7 @@
         recovery.hidden = !recoveringPassword;
         button.classList.toggle("is-signed-in", Boolean(user));
         button.querySelector("strong").textContent = user ? "Minha conta" : "Entrar ou criar conta";
-        button.querySelector("small").textContent = user ? user.email : "Sincronize sua biblioteca";
+        button.querySelector("small").textContent = user ? user.email : "Guarde a lista de mesas";
         const email = document.getElementById("realAccountEmailValue");
         if (email) email.textContent = user?.email || "";
         if (!user) setStorageStatus("Seus dados estão salvos neste navegador");
@@ -193,7 +196,7 @@
                 setMessage("Conta criada. Confira seu e-mail para confirmar o cadastro.", "success");
             } else {
                 await setUser(result.data.user, { preserveGuest: true });
-                setMessage("Conta conectada e biblioteca sincronizada.", "success");
+                setMessage("Conta conectada e mesas sincronizadas.", "success");
             }
         } catch (error) {
             console.error("Falha na autenticação", error);
@@ -263,13 +266,13 @@
     function createInterface() {
         document.body.insertAdjacentHTML("beforeend", `
             <button id="realAccountButton" class="real-account-button" type="button" aria-haspopup="dialog">
-                <span aria-hidden="true">♙</span><span><strong>Entrar ou criar conta</strong><small>Sincronize sua biblioteca</small></span>
+                <span aria-hidden="true">♙</span><span><strong>Entrar ou criar conta</strong><small>Sincronize suas mesas</small></span>
             </button>
             <dialog id="realAccountDialog" class="real-account-dialog" aria-labelledby="realAccountTitle">
                 <button id="realAccountClose" class="real-account-close" type="button" aria-label="Fechar">×</button>
-                <div class="real-account-brand"><span aria-hidden="true">✦</span><div><small>R.E.A.L</small><h2 id="realAccountTitle">Sua biblioteca, em qualquer lugar</h2></div></div>
+                <div class="real-account-brand"><span aria-hidden="true">✦</span><div><small>R.E.A.L</small><h2 id="realAccountTitle">Suas mesas, em qualquer lugar</h2></div></div>
                 <section id="realAccountSignedOut">
-                    <p>Entre para guardar personagens, campanhas e homebrews na sua conta. O que já está neste navegador será preservado.</p>
+                    <p>Entre para guardar nome, descrição e capa das mesas na conta. Mapas, cenas, tokens, documentos e anotações privadas ficam neste aparelho; leve-os com um backup da mesa.</p>
                     <form id="realAccountAuthForm" class="real-account-form">
                         <label>Nome <small>(usado ao criar a conta)</small><input name="name" autocomplete="name" maxlength="80"></label>
                         <label>E-mail<input id="realAccountEmail" name="email" type="email" autocomplete="email" required></label>
@@ -281,8 +284,8 @@
                 <section id="realAccountSignedIn" hidden>
                     <p class="real-account-kicker">CONTA CONECTADA</p>
                     <strong id="realAccountEmailValue" class="real-account-email"></strong>
-                    <p id="realAccountSyncState">Tudo salvo na sua conta</p>
-                    <div class="real-account-benefits"><span>✓ Personagens</span><span>✓ Campanhas</span><span>✓ Homebrews</span></div>
+                    <p id="realAccountSyncState">Lista e detalhes das mesas salvos na conta</p>
+                    <div class="real-account-benefits"><span>✓ Lista de mesas</span><span>✓ Nomes e capas</span></div>
                     <button id="realAccountSyncNow" class="real-account-primary" type="button">Sincronizar agora</button>
                     <button id="realAccountSignOut" class="real-account-link" type="button">Sair desta conta</button>
                 </section>
@@ -297,6 +300,7 @@
                 <p id="realAccountMessage" class="real-account-message" role="status" aria-live="polite"></p>
             </dialog>`);
         document.getElementById("realAccountButton").addEventListener("click", openDialog);
+        document.getElementById("accountSlot")?.appendChild(document.getElementById("realAccountButton"));
         document.getElementById("realAccountClose").addEventListener("click", () => document.getElementById("realAccountDialog").close());
         document.getElementById("realAccountDialog").addEventListener("click", (event) => {
             if (event.target === event.currentTarget) event.currentTarget.close();
@@ -314,7 +318,7 @@
         createInterface();
         if (!RULES || !config || !window.supabase?.createClient) {
             document.getElementById("realAccountButton").disabled = true;
-            setMessage("A conexão de contas não carregou. A biblioteca local continua disponível.", "error");
+            setMessage("A conexão de contas não carregou. Suas mesas locais continuam disponíveis.", "error");
             return null;
         }
         client = window.supabase.createClient(config.url, config.publishableKey);
@@ -325,18 +329,20 @@
                 setTimeout(() => { openDialog(); renderAccount(); }, 0);
             } else if (event === "SIGNED_OUT") {
                 user = null;
-                setTimeout(renderAccount, 0);
+                setTimeout(() => { renderAccount(); window.dispatchEvent(new Event("real:account-changed")); }, 0);
             } else if (event === "SIGNED_IN" && session?.user?.id !== user?.id) {
-                setTimeout(() => setUser(session.user, { preserveGuest: true }), 0);
+                setTimeout(async () => { await setUser(session.user, { preserveGuest: true }); window.dispatchEvent(new Event("real:account-changed")); }, 0);
             }
         });
         const { data, error } = await client.auth.getUser();
-        if (error) throw error;
+        // Sem sessão é o estado normal de quem usa as mesas locais, não uma falha da conta.
+        if (error && error.name !== "AuthSessionMissingError") throw error;
         if (!data.user && readLibrary()._account?.userId && restoreGuestLibrary()) {
             location.reload();
             return null;
         }
         await setUser(data.user || null, { forceSync: Boolean(data.user), preserveGuest: Boolean(data.user) });
+        window.dispatchEvent(new Event("real:account-changed"));
         return user;
     }
 

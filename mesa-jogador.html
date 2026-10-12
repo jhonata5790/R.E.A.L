@@ -2,11 +2,11 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Mesa dos jogadores | R.E.A.L</title>
-    <link rel="stylesheet" href="tabletop-guest.css?v=20260929-resizable-documents">
-    <link rel="stylesheet" href="visitor-name.css?v=20260928-visitor">
-    <script src="visitor-name.js?v=20260928-visitor"></script>
+    <link rel="stylesheet" href="assets/css/tabletop-guest.css?v=20261008-mobile-performance">
+    <link rel="stylesheet" href="assets/css/visitor-name.css?v=20260928-visitor">
+    <script src="assets/js/shared/visitor-name.js?v=20260928-visitor"></script>
 </head>
 <body>
     <main class="guest-tabletop">
@@ -14,6 +14,9 @@
             <a href="index.html" aria-label="Voltar ao R.E.A.L">R.E.A.L</a>
             <span>VISÃO DOS JOGADORES</span>
             <p id="guestStatus" role="status" aria-live="polite">Conectando à mesa…</p>
+            <button id="guestEconomy" class="guest-tabletop__economy" type="button" aria-pressed="false">
+                <strong>Economia</strong><small>Automática no celular</small>
+            </button>
         </header>
         <div class="guest-tabletop__stage">
             <video id="guestVideo" aria-label="Transmissão ao vivo da área dos jogadores" autoplay muted playsinline hidden></video>
@@ -53,7 +56,8 @@
         <p class="guest-tabletop__note">Esta é uma visão somente para observar. O mestre controla o mapa e os tokens.</p>
     </main>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.3/dist/umd/supabase.js"></script>
-    <script src="supabase-config.js?v=20260928-online-tabletop"></script>
-    <script src="tabletop-guest.js?v=20260929-resizable-documents"></script>
+    <script src="assets/js/shared/supabase-config.js?v=20260928-online-tabletop"></script>
+    <script src="assets/js/tabletop/tabletop-performance.js?v=20261008-mobile-performance"></script>
+    <script src="assets/js/tabletop/tabletop-guest.js?v=20261008-mobile-performance"></script>
 </body>
 </html>

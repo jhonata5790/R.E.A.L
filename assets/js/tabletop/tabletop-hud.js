@@ -1,4 +1,4 @@
-// Navegação da mesa e lista rápida de espectadores, sem alterar o estado salvo da campanha.
+// Navegação do tabletop e lista rápida de espectadores, sem alterar o estado salvo da mesa.
 (function () {
     "use strict";
 
@@ -8,50 +8,22 @@
     const peek = $("viewerPeek");
     const peekButton = $("openViewerPeek");
     const canvas = $("gameCanvas");
-    const sections = { shield: $("hudShield"), documents: $("hudDocuments") };
-    const campaignId = new URLSearchParams(location.search).get("campaign");
-    const campaignHref = campaignId ? `index.html#campanha/${encodeURIComponent(campaignId)}` : "index.html#campanhas";
+    const search = new URLSearchParams(location.search);
+    const tableId = search.get("table") || search.get("campaign");
+    const tableHref = tableId ? `index.html#mesa/${encodeURIComponent(tableId)}` : "index.html#inicio";
     let peekMode = null;
 
-    function renderCampaign() {
+    function renderTable() {
         let library;
         try { library = JSON.parse(localStorage.getItem("cronicas-biblioteca-v2") || "null"); }
         catch { library = null; }
-        const campaign = library?.campaigns?.find((entry) => entry.id === campaignId);
-        $("hudCampaignName").textContent = campaign?.name || (campaignId ? "Campanha" : "Mesa sem campanha");
-        $("hudCampaignNotes").textContent = campaign?.notes?.trim() || "Ainda não há anotações nesta campanha.";
-        $("hudCampaignLink").href = campaignHref;
-        const ids = new Set(Array.isArray(campaign?.characters) ? campaign.characters : []);
-        const characters = (Array.isArray(library?.characters) ? library.characters : [])
-            .filter((entry) => ids.has(entry.id));
-        const list = $("hudCharacterList");
-        list.replaceChildren();
-        $("hudCharacterEmpty").hidden = characters.length > 0;
-        characters.forEach((character) => {
-            const item = document.createElement("li");
-            const link = document.createElement("a");
-            const name = document.createElement("strong");
-            const detail = document.createElement("small");
-            name.textContent = character.name || "Personagem sem nome";
-            detail.textContent = character.player || character.class || "Ficha de personagem";
-            link.href = `personagem.html?id=${encodeURIComponent(character.id)}`;
-            link.append(name, detail);
-            item.appendChild(link);
-            list.appendChild(item);
-        });
-    }
-
-    function setSection(next) {
-        document.querySelectorAll("[data-hud-section]").forEach((button) => {
-            const selected = button.dataset.hudSection === next;
-            button.setAttribute("aria-expanded", String(selected));
-        });
-        Object.entries(sections).forEach(([name, section]) => { section.hidden = name !== next; });
+        const table = library?.campaigns?.find((entry) => entry.id === tableId);
+        $("hudCampaignName").textContent = table?.name || "Tabletop";
+        $("hudCampaignLink").href = tableHref;
     }
 
     function openMenu() {
-        renderCampaign();
-        setSection(null);
+        renderTable();
         hidePeek();
         menu.showModal();
         menuButton.setAttribute("aria-expanded", "true");
@@ -66,14 +38,8 @@
         menuButton.setAttribute("aria-expanded", "false");
         menuButton.focus();
     });
-    document.querySelectorAll("[data-hud-section]").forEach((button) => {
-        button.addEventListener("click", () => {
-            const name = button.dataset.hudSection;
-            setSection(sections[name].hidden ? name : null);
-        });
-    });
     window.addEventListener("storage", (event) => {
-        if (event.key === "cronicas-biblioteca-v2" && menu.open) renderCampaign();
+        if (event.key === "cronicas-biblioteca-v2" && menu.open) renderTable();
     });
 
     function showPeek(mode) {

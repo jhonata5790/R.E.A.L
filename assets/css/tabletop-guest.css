@@ -2,11 +2,16 @@
 * { box-sizing: border-box; }
 body { min-width: 0; min-height: 100vh; margin: 0; color: #fff1f3; background: #070509; }
 .guest-tabletop { display: flex; flex-direction: column; min-height: 100vh; }
-.guest-tabletop__header { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; min-height: 70px; padding: 14px clamp(14px, 3vw, 36px); background: #160f16; border-bottom: 1px solid #55313c; }
+.guest-tabletop__header { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; min-height: 70px; padding: 14px max(14px, env(safe-area-inset-right)) 14px max(14px, env(safe-area-inset-left)); background: #160f16; border-bottom: 1px solid #55313c; }
 .guest-tabletop__header a { color: #f4d7a1; font-family: Georgia, serif; font-size: 22px; font-weight: 700; text-decoration: none; }
 .guest-tabletop__header a:focus-visible { outline: 2px solid #f4d7a1; outline-offset: 4px; }
 .guest-tabletop__header span { color: #bba7b0; font-size: 10px; font-weight: 800; letter-spacing: .16em; }
 .guest-tabletop__header p { margin: 0 0 0 auto; color: #f4d7a1; font-size: 12px; }
+.guest-tabletop__economy { display: grid; gap: 1px; min-height: 42px; padding: 7px 11px; color: #d8c7ce; text-align: left; background: #241923; border: 1px solid #5e4350; border-radius: 9px; cursor: pointer; }
+.guest-tabletop__economy strong { font-size: 11px; }
+.guest-tabletop__economy small { color: #a9959e; font-size: 9px; }
+.guest-tabletop__economy[aria-pressed="true"] { color: #d9ffe6; background: #173023; border-color: #4c9a67; }
+.guest-tabletop__economy[aria-pressed="true"] small { color: #a7d7b7; }
 .guest-tabletop__stage { display: grid; flex: 1; place-items: center; min-height: 0; padding: clamp(10px, 2vw, 24px); }
 #guestFrame, #guestVideo { display: block; max-width: 100%; max-height: calc(100vh - 155px); aspect-ratio: 16 / 9; object-fit: contain; border: 1px solid #765660; box-shadow: 0 22px 80px #0009; }
 #guestFrame[hidden], #guestVideo[hidden], .guest-tabletop__waiting[hidden] { display: none; }
@@ -51,4 +56,4 @@ body { min-width: 0; min-height: 100vh; margin: 0; color: #fff1f3; background: #
 .guest-document__resize:focus-visible { outline: 2px solid #ffd0dc; outline-offset: -2px; background: #ffd0dc55; }
 .guest-document [hidden] { display: none; }
 .guest-document :focus-visible, .guest-document__open:focus-visible { outline: 2px solid #ffd0dc; outline-offset: 3px; }
-@media (max-width: 580px) { .guest-tabletop__header { gap: 8px 14px; } .guest-tabletop__header p { width: 100%; margin: 0; } #guestFrame, #guestVideo { max-height: calc(100vh - 190px); } .guest-document { top: 72px; right: 12px; width: calc(100vw - 24px); height: min(300px, calc(100dvh - 96px)); } .guest-document__head small { display: none; } .guest-document__resize--n, .guest-document__resize--s { height: 16px; } .guest-document__resize--e, .guest-document__resize--w { width: 16px; } .guest-document__resize--ne, .guest-document__resize--se, .guest-document__resize--sw, .guest-document__resize--nw { width: 26px; height: 26px; } }
+@media (max-width: 580px) { body { min-height: 100dvh; } .guest-tabletop { min-height: 100dvh; } .guest-tabletop__header { gap: 7px 12px; min-height: 0; padding-top: max(9px, env(safe-area-inset-top)); padding-bottom: 9px; } .guest-tabletop__header a { font-size: 18px; } .guest-tabletop__header > span { flex: 1; } .guest-tabletop__header p { order: 4; width: 100%; margin: 0; font-size: 10px; } .guest-tabletop__economy { min-height: 38px; padding: 5px 9px; } .guest-tabletop__stage { padding: 6px; } #guestFrame, #guestVideo { max-height: calc(100dvh - 135px); border-right: 0; border-left: 0; box-shadow: none; } .guest-tabletop__note { display: none; } .guest-document__open { right: max(10px, env(safe-area-inset-right)); bottom: max(10px, env(safe-area-inset-bottom)); } .guest-document { top: 72px; right: 12px; width: calc(100vw - 24px); height: min(300px, calc(100dvh - 96px)); } .guest-document__head small { display: none; } .guest-document__resize--n, .guest-document__resize--s { height: 16px; } .guest-document__resize--e, .guest-document__resize--w { width: 16px; } .guest-document__resize--ne, .guest-document__resize--se, .guest-document__resize--sw, .guest-document__resize--nw { width: 26px; height: 26px; } }

@@ -54,7 +54,7 @@
 
     function persist() {
         const snapshot = { documents: documents.map((item) => ({ ...item })), revealedId };
-        saving = saving.catch(() => {}).then(() => writeLibrary(snapshot));
+        saving = saving.catch(() => {}).then(async () => { await writeLibrary(snapshot); window.REAL_TABLE_WORKSPACE?.announceDocuments(campaignKey); });
         return saving;
     }
 
@@ -249,5 +249,16 @@
         render();
     });
     window.REAL_TABLETOP_DOCUMENTS = { sendCurrent };
+    async function refreshDocuments() {
+        if (!ready || editingId) return;
+        const value = await readLibrary();
+        documents = Array.isArray(value?.documents) ? value.documents : [];
+        revealedId = value?.revealedId || null;
+        render();
+    }
+    window.addEventListener("focus", () => refreshDocuments().catch(() => {}));
+    window.addEventListener("real:workspace-changed", (event) => {
+        if (event.detail?.tableId === campaignKey && event.detail?.kind === "documents") refreshDocuments().catch(() => {});
+    });
     setKind();
 })();

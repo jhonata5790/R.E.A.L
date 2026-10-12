@@ -4,8 +4,8 @@ const $ = (id) => document.getElementById(id);
 const canvas = $("gameCanvas");
 const ctx = canvas.getContext("2d");
 
-const panels = { grid: $("gridPanel"), tokens: $("tokenPanel"), session: $("sessionPanel"), view: $("playerViewPanel") };
-const panelButtons = { grid: $("toolMap"), tokens: $("toolToken"), session: $("toolSession"), view: $("toolPlayerView") };
+const panels = { grid: $("gridPanel"), tokens: $("tokenPanel"), session: $("sessionPanel"), view: $("playerViewPanel"), transmission: $("transmissionPanel"), scenes: $("scenesPanel") };
+const panelButtons = { grid: $("toolMap"), tokens: $("toolToken"), session: $("toolSession"), view: $("toolPlayerView"), transmission: $("toolTransmission"), scenes: $("toolScenes") };
 const toolbar = $("toolbar");
 const dockToggle = $("toggleToolDock");
 dockToggle.addEventListener("click", () => {
@@ -18,13 +18,19 @@ dockToggle.addEventListener("click", () => {
 });
 const VIEW_RULES = window.REAL_TABLETOP_VIEW;
 const SELECTION_RULES = window.REAL_TABLETOP_SELECTION;
+const SHORTCUTS = window.REAL_TABLETOP_SHORTCUTS;
+const WORKSPACE = window.REAL_TABLE_WORKSPACE;
+let currentSceneId = null;
 const previewDialog = $("playerPreview");
 const previewCanvas = $("playerPreviewCanvas");
 const previewCtx = previewCanvas.getContext("2d");
 let playerStream = null;
+let playerStreamTrack = null;
+let playerFrameTimer = null;
+let lastPlayerFrameAt = 0;
 
 const THEME = { background: "#070509", grid: "#cd263d", accent: "#fb3b53", accentSoft: "#fecdd3" };
-const DEFAULT_GRID = { visible: false, size: 50, opacity: 0.32, offsetX: 0, offsetY: 0, metersPerSquare: 3 };
+const DEFAULT_GRID = { visible: false, snapTokens: false, size: 50, opacity: 0.32, offsetX: 0, offsetY: 0, metersPerSquare: 3 };
 const TYPE_COLORS = { player: "#4ade80", ally: "#38bdf8", enemy: "#fb3b53", neutral: "#facc15" };
 
 const MIN_ZOOM = 0.25;
@@ -59,6 +65,72 @@ const interaction = {
     selectionBeforeMarquee: [], additive: false, moved: false
 };
 const measurement = { drawing: false, start: null, end: null };
+let followingPlayer = null;
+let lastMouse = null;
+let tokenClipboard = [];
+let pasteCount = 0;
+let historyReady = false;
+let restoringHistory = false;
+let sceneLoading = false;
+
+function captureSceneState() {
+    return {
+        camera: { ...camera }, playerView: { ...playerView }, grid: { ...gridSettings },
+        map: { ...mapState }, tokens: tokens.map((token) => ({ ...token })),
+        selectedIds: selectedTokenList().map((token) => token.id), primaryId: selectedToken?.id
+    };
+}
+
+function sameSceneState(a, b) {
+    const equal = (left, right) => Object.keys(left).length === Object.keys(right).length
+        && Object.keys(left).every((key) => left[key] === right[key]);
+    return equal(a.camera, b.camera) && equal(a.playerView, b.playerView) && equal(a.grid, b.grid)
+        && equal(a.map, b.map) && a.tokens.length === b.tokens.length
+        && a.tokens.every((token, index) => equal(token, b.tokens[index]));
+}
+
+const sceneHistory = SHORTCUTS.createHistory(sameSceneState);
+
+function recordSceneState() {
+    if (!historyReady || restoringHistory || sceneLoading || followingPlayer) return;
+    sceneHistory.record(captureSceneState());
+    updateHistoryUI();
+}
+
+function updateHistoryUI() {
+    $("undoScene").disabled = !sceneHistory.canUndo;
+    $("redoScene").disabled = !sceneHistory.canRedo;
+}
+
+function restoreSceneState(state) {
+    restoringHistory = true;
+    resetInteraction();
+    clearMeasurement();
+    setMode("select");
+    Object.assign(camera, state.camera);
+    Object.assign(playerView, state.playerView);
+    Object.assign(gridSettings, state.grid);
+    Object.assign(mapState, state.map);
+    tokens.splice(0, tokens.length, ...state.tokens.map((token) => ({ ...token })));
+    nextTokenId = Math.max(nextTokenId, ...tokens.map((token) => token.id + 1));
+    const selection = tokens.filter((token) => state.selectedIds.includes(token.id));
+    setTokenSelection(selection, tokens.find((token) => token.id === state.primaryId));
+    updateMapUI(); updateGridUI(); updateEmptyTabletop(); updatePlayerViewUI();
+    requestRender(); scheduleSave();
+    restoringHistory = false;
+    updateHistoryUI();
+}
+
+function travelHistory(direction) {
+    if (!historyReady || sceneLoading) return;
+    if (followingPlayer) cancelPlayerFollow();
+    if (interaction.type || measurement.drawing) return;
+    const state = sceneHistory[direction]();
+    if (state) {
+        restoreSceneState(state);
+        shortcutNotice(direction === "undo" ? "Alteração desfeita" : "Alteração refeita");
+    }
+}
 
 // Renderização sob demanda
 function requestRender() {
@@ -67,8 +139,32 @@ function requestRender() {
     requestAnimationFrame(() => {
         renderFrameRequested = false;
         draw();
-        if (previewDialog.open || playerStream) drawPlayerPreview();
+        window.dispatchEvent(new Event("real:tabletop-ui"));
+        if (previewDialog.open || playerStream) {
+            drawPlayerPreview();
+            requestPlayerStreamFrame();
+        }
     });
+}
+
+function requestPlayerStreamFrame(force = false) {
+    if (!playerStreamTrack || typeof playerStreamTrack.requestFrame !== "function") return;
+    const now = performance.now();
+    const wait = Math.max(0, 125 - (now - lastPlayerFrameAt));
+    if (force || wait === 0) {
+        clearTimeout(playerFrameTimer);
+        playerFrameTimer = null;
+        lastPlayerFrameAt = now;
+        try { playerStreamTrack.requestFrame(); }
+        catch { /* O fallback automático do navegador mantém a transmissão. */ }
+        return;
+    }
+    if (!playerFrameTimer) {
+        playerFrameTimer = setTimeout(() => {
+            playerFrameTimer = null;
+            requestPlayerStreamFrame(true);
+        }, wait);
+    }
 }
 
 function resizeCanvas() {
@@ -186,6 +282,8 @@ $("closeGridPanel").addEventListener("click", () => closePanels());
 $("closeTokenPanel").addEventListener("click", () => closePanels());
 $("closeSessionPanel").addEventListener("click", () => closePanels());
 $("closePlayerViewPanel").addEventListener("click", () => closePanels());
+$("closeTransmissionPanel").addEventListener("click", () => closePanels());
+$("closeScenesPanel").addEventListener("click", () => closePanels());
 $("startMapImport").addEventListener("click", () => closePanels("grid"));
 $("startTokenImport").addEventListener("click", () => closePanels("tokens"));
 
@@ -209,6 +307,7 @@ function updateMapUI() {
 
 function updateGridUI() {
     $("gridVisible").checked = gridSettings.visible;
+    $("gridSnap").checked = gridSettings.snapTokens;
     $("gridSize").value = gridSettings.size;
     $("gridSizeValue").value = gridSettings.size + " px";
     $("gridOpacity").value = Math.round(gridSettings.opacity * 100);
@@ -259,6 +358,9 @@ $("removeMap").addEventListener("click", () => {
 $("gridVisible").addEventListener("change", (event) => {
     gridSettings.visible = event.target.checked; requestRender(); scheduleSave();
 });
+$("gridSnap").addEventListener("change", (event) => {
+    gridSettings.snapTokens = event.target.checked; scheduleSave();
+});
 $("gridSize").addEventListener("input", (event) => {
     gridSettings.size = Number(event.target.value); updateGridUI(); requestRender(); scheduleSave();
 });
@@ -279,7 +381,7 @@ $("resetGrid").addEventListener("click", () => {
     Object.assign(gridSettings, DEFAULT_GRID); updateGridUI(); requestRender(); scheduleSave();
 });
 
-// Tokens, ficha e camadas
+// Tokens e camadas
 function selectedTokenList() {
     return tokens.filter((token) => selectedTokens.has(token));
 }
@@ -414,26 +516,28 @@ $("tokenFileInput").addEventListener("change", async () => {
 
 async function duplicateSelectedToken() {
     const originals = selectedTokenList();
-    if (!originals.length) return;
+    if (!originals.length || sceneLoading) return;
+    sceneLoading = true;
     const copies = [];
-    for (const token of originals) {
-        const copy = await createToken(token.source, token.name + " (cópia)", {
-            image: token.image,
-            x: token.x + 24, y: token.y + 24,
-            width: token.width, rotation: token.rotation,
-            type: token.type, color: token.color,
-            hp: token.hp, maxHp: token.maxHp,
-            condition: token.condition,
-            visibleToPlayers: token.visibleToPlayers,
-            showName: token.showName,
-            showHealth: token.showHealth,
-            select: false,
-            save: false
-        });
-        if (copy) copies.push(copy);
-    }
-    if (copies.length) setTokenSelection(copies, copies.at(-1));
-    scheduleSave();
+    try {
+        for (const token of originals) {
+            const copy = await createToken(token.source, token.name + " (cópia)", {
+                image: token.image,
+                x: token.x + 24, y: token.y + 24,
+                width: token.width, rotation: token.rotation,
+                type: token.type, color: token.color,
+                hp: token.hp, maxHp: token.maxHp,
+                condition: token.condition,
+                visibleToPlayers: token.visibleToPlayers,
+                showName: token.showName,
+                showHealth: token.showHealth,
+                select: false,
+                save: false
+            });
+            if (copy) copies.push(copy);
+        }
+        if (copies.length) setTokenSelection(copies, copies.at(-1));
+    } finally { sceneLoading = false; scheduleSave(); }
 }
 
 function deleteSelectedToken() {
@@ -551,10 +655,12 @@ function getResizeWidth(token, x, y) {
 
 // Régua
 function setMode(mode) {
+    if (followingPlayer) cancelPlayerFollow();
     activeMode = mode;
     updateRulerUI();
     updatePlayerViewUI();
     canvas.style.cursor = mode === "ruler" || mode === "player-view" ? "crosshair" : "default";
+    requestRender();
 }
 
 function toggleHud() {
@@ -666,13 +772,17 @@ $("closePlayerPreview").addEventListener("click", () => previewDialog.close());
 
 // Interação com o canvas
 canvas.addEventListener("mousedown", (event) => {
+    if (sceneLoading) return;
+    lastMouse = { x: event.clientX, y: event.clientY };
     const point = screenToWorld(event.clientX, event.clientY);
-    if (event.button === 2) {
+    if (event.button === 2 || event.button === 1) {
+        event.preventDefault();
         Object.assign(interaction, { type: "pan", lastX: event.clientX, lastY: event.clientY });
         canvas.style.cursor = "grabbing";
         return;
     }
     if (event.button !== 0) return;
+    if (followingPlayer) return;
     if (activeMode === "ruler") {
         measurement.drawing = true;
         measurement.start = snapMeasurementPoint(point);
@@ -737,6 +847,7 @@ canvas.addEventListener("mousedown", (event) => {
 });
 
 canvas.addEventListener("mousemove", (event) => {
+    lastMouse = { x: event.clientX, y: event.clientY };
     const point = screenToWorld(event.clientX, event.clientY);
     if (measurement.drawing) {
         measurement.end = snapMeasurementPoint(point); requestRender(); return;
@@ -746,8 +857,10 @@ canvas.addEventListener("mousemove", (event) => {
         camera.y += (event.clientY - interaction.lastY) / camera.zoom;
         interaction.lastX = event.clientX;
         interaction.lastY = event.clientY;
+        if (followingPlayer) movePlayerToMouse();
         requestRender(); return;
     }
+    if (followingPlayer) { movePlayerToMouse(); return; }
     if (interaction.type === "player-view") {
         playerView.x = point.x - interaction.offsetX;
         playerView.y = point.y - interaction.offsetY;
@@ -791,11 +904,11 @@ canvas.addEventListener("mousemove", (event) => {
     } else canvas.style.cursor = getTopmostTokenAt(point) ? "grab" : "default";
 });
 
-canvas.addEventListener("mouseup", (event) => {
+function finishCanvasInteraction(event) {
     if (event.button === 0 && measurement.drawing) {
         measurement.drawing = false; updateRulerUI(); requestRender();
     }
-    if (event.button === 0 && interaction.type === "drag" && interaction.token && interaction.moved && event.shiftKey) {
+    if (event.button === 0 && interaction.type === "drag" && interaction.token && interaction.moved && (event.shiftKey || gridSettings.snapTokens)) {
         const delta = SELECTION_RULES.snapDelta(interaction.token, gridSettings);
         interaction.tokens.forEach((item) => {
             item.token.x += delta.x;
@@ -811,8 +924,8 @@ canvas.addEventListener("mouseup", (event) => {
     if (interaction.type && interaction.type !== "pan" && interaction.type !== "player-view") {
         updateTokenLibrary(); updateTokenInspector(); scheduleSave();
     }
-    if (interaction.type === "pan") scheduleSave();
-    if (event.button === 2 || event.button === 0) {
+    if (interaction.type === "pan" || interaction.type === "player-view") scheduleSave();
+    if (event.button === 2 || event.button === 1 || event.button === 0) {
         interaction.type = null;
         interaction.token = null;
         interaction.tokens = [];
@@ -821,22 +934,19 @@ canvas.addEventListener("mouseup", (event) => {
         interaction.marqueeStart = null;
         interaction.marqueeEnd = null;
         canvas.style.cursor = activeMode === "ruler" || activeMode === "player-view" ? "crosshair" : "default";
+        requestRender();
     }
-});
+}
+canvas.addEventListener("mouseup", finishCanvasInteraction);
+window.addEventListener("mouseup", finishCanvasInteraction);
 
-canvas.addEventListener("mouseleave", () => {
-    if (interaction.type) scheduleSave();
-    interaction.type = null;
-    interaction.token = null;
-    interaction.tokens = [];
-    interaction.anchorStart = null;
-    interaction.moved = false;
-    interaction.marqueeStart = null;
-    interaction.marqueeEnd = null;
-    measurement.drawing = false;
-    canvas.style.cursor = activeMode === "ruler" || activeMode === "player-view" ? "crosshair" : "default";
+canvas.addEventListener("mouseleave", (event) => {
+    if (interaction.type || measurement.drawing) finishCanvasInteraction({
+        button: interaction.type === "pan" ? 2 : 0, shiftKey: event.shiftKey
+    });
 });
 canvas.addEventListener("contextmenu", (event) => event.preventDefault());
+canvas.addEventListener("auxclick", (event) => { if (event.button === 1) event.preventDefault(); });
 canvas.addEventListener("wheel", (event) => {
     event.preventDefault();
     const point = screenToWorld(event.clientX, event.clientY);
@@ -844,16 +954,18 @@ canvas.addEventListener("wheel", (event) => {
     camera.zoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, camera.zoom));
     camera.x = (event.clientX - window.innerWidth / 2) / camera.zoom - point.x;
     camera.y = (event.clientY - window.innerHeight / 2) / camera.zoom - point.y;
+    if (followingPlayer) movePlayerToMouse();
     requestRender(); scheduleSave();
 }, { passive: false });
 
 // Salvamento persistente com IndexedDB
 const DB_NAME = "tabletop2d-storage";
 const DB_STORE = "sessions";
-const campaignId = new URLSearchParams(location.search).get("campaign");
-const SESSION_KEY = campaignId ? "campaign:" + campaignId : "autosave";
-if (campaignId) {
-    document.querySelector(".campaign-return").href = "index.html#campanha/" + encodeURIComponent(campaignId);
+const tableParams = new URLSearchParams(location.search);
+const tableId = tableParams.get("table") || tableParams.get("campaign");
+const SESSION_KEY = tableId ? "campaign:" + tableId : "autosave";
+if (tableId) {
+    document.querySelector(".campaign-return").href = "index.html#mesa/" + encodeURIComponent(tableId);
 }
 
 function openDatabase() {
@@ -866,36 +978,48 @@ function openDatabase() {
 }
 
 async function writeSession(data) {
+    if (WORKSPACE) {
+        const workspace = await WORKSPACE.saveSession(tableId || "autosave", data, window.REAL_TABLETOP_MASTER?.captureThumbnail());
+        if (data.sceneId && workspace.activeSceneId !== data.sceneId) return;
+    }
     const database = await openDatabase();
     return new Promise((resolve, reject) => {
         const transaction = database.transaction(DB_STORE, "readwrite");
         transaction.objectStore(DB_STORE).put(data, SESSION_KEY);
-        transaction.oncomplete = resolve;
-        transaction.onerror = () => reject(transaction.error);
+        transaction.oncomplete = () => { database.close?.(); resolve(); };
+        transaction.onerror = () => { database.close?.(); reject(transaction.error); };
+        transaction.onabort = () => { database.close?.(); reject(transaction.error); };
     });
 }
 
 async function readSession() {
+    if (WORKSPACE) {
+        const workspace = await WORKSPACE.read(tableId || "autosave");
+        const scene = WORKSPACE.active(workspace);
+        return { ...scene.session, sceneId: scene.id };
+    }
     const database = await openDatabase();
     return new Promise((resolve, reject) => {
         const store = database.transaction(DB_STORE, "readonly").objectStore(DB_STORE);
         const request = store.get(SESSION_KEY);
         request.onsuccess = () => {
-            if (request.result || campaignId !== "campanha-inicial") {
+            if (request.result || tableId !== "campanha-inicial") {
+                database.close?.();
                 resolve(request.result || null);
                 return;
             }
             const legacy = store.get("autosave");
-            legacy.onsuccess = () => resolve(legacy.result || null);
-            legacy.onerror = () => reject(legacy.error);
+            legacy.onsuccess = () => { database.close?.(); resolve(legacy.result || null); };
+            legacy.onerror = () => { database.close?.(); reject(legacy.error); };
         };
-        request.onerror = () => reject(request.error);
+        request.onerror = () => { database.close?.(); reject(request.error); };
     });
 }
 
 function serializeSession() {
     return {
         version: 1,
+        sceneId: currentSceneId,
         savedAt: new Date().toISOString(),
         camera: { ...camera },
         playerView: { ...playerView },
@@ -919,17 +1043,23 @@ function setSaveStatus(message) {
     $("sessionDetails").textContent = message;
 }
 
+let sessionSaveQueue = Promise.resolve();
 async function saveSession(message = "Mesa salva automaticamente") {
+    const snapshot = serializeSession();
     try {
-        await writeSession(serializeSession());
+        sessionSaveQueue = sessionSaveQueue.catch(() => {}).then(() => writeSession(snapshot));
+        await sessionSaveQueue;
         const time = new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
         setSaveStatus(message + " · " + time);
+        return true;
     } catch {
         setSaveStatus("Não foi possível salvar esta mesa");
+        return false;
     }
 }
 
 function scheduleSave() {
+    recordSceneState();
     clearTimeout(saveTimer);
     $("saveStatus").textContent = "Salvando…";
     saveTimer = setTimeout(() => saveSession(), 300);
@@ -938,6 +1068,7 @@ function scheduleSave() {
 
 async function applySession(data) {
     if (!data) return false;
+    currentSceneId = data.sceneId || currentSceneId;
     Object.assign(measurement, { drawing: false, start: null, end: null });
     Object.assign(camera, { x: 0, y: 0, zoom: 1 }, data.camera || {});
     Object.assign(playerView, VIEW_RULES.normalize(data.playerView));
@@ -968,19 +1099,29 @@ async function applySession(data) {
 }
 
 async function loadLastSession(showMessage = true) {
+    if (sceneLoading) return false;
+    if (followingPlayer) cancelPlayerFollow();
+    sceneLoading = true;
     try {
         const data = await readSession();
         if (!data) return false;
+        const previousSceneId = currentSceneId;
         await applySession(data);
+        if (historyReady && previousSceneId !== currentSceneId) { sceneHistory.reset(captureSceneState()); updateHistoryUI(); }
         if (showMessage) setSaveStatus("Última mesa carregada");
         return true;
     } catch {
         setSaveStatus("Não foi possível carregar a mesa");
         return false;
+    } finally {
+        sceneLoading = false;
+        if (historyReady) { recordSceneState(); scheduleSave(); }
     }
 }
 
 async function createNewSession() {
+    if (followingPlayer) cancelPlayerFollow();
+    resetInteraction();
     tokens.splice(0);
     selectedToken = null;
     selectedTokens.clear();
@@ -991,35 +1132,203 @@ async function createNewSession() {
     Object.assign(measurement, { drawing: false, start: null, end: null });
     clearMap(false);
     updateTokenLibrary(); updateTokenInspector(); updateRulerUI(); updatePlayerViewUI();
+    recordSceneState();
+    window.dispatchEvent(new Event("real:tabletop-changed"));
     await saveSession("Nova mesa criada");
 }
 
 $("saveSession").addEventListener("click", () => saveSession("Mesa salva"));
 $("loadSession").addEventListener("click", () => loadLastSession());
 $("newSession").addEventListener("click", async () => {
-    if (window.confirm("Criar uma nova mesa e substituir o salvamento atual?")) await createNewSession();
+    if (window.confirm("Limpar o mapa e os tokens da cena atual? Ctrl + Z recupera durante esta visita.")) await createNewSession();
 });
 
 // Teclado
-window.addEventListener("keydown", (event) => {
-    const isTyping = event.target.matches?.("input, textarea, select");
-    if (!isTyping && !document.querySelector("dialog[open]") && !event.repeat && !event.ctrlKey && !event.metaKey && !event.altKey && event.key.toLowerCase() === "h") {
-        event.preventDefault();
-        toggleHud();
+let shortcutNoticeTimer = null;
+
+function shortcutNotice(message, persistent = false) {
+    clearTimeout(shortcutNoticeTimer);
+    const status = $("shortcutStatus");
+    status.textContent = message;
+    status.hidden = false;
+    if (!persistent) shortcutNoticeTimer = setTimeout(() => { status.hidden = true; }, 2400);
+}
+
+function resetInteraction() {
+    Object.assign(interaction, { type: null, token: null, tokens: [], anchorStart: null,
+        moved: false, marqueeStart: null, marqueeEnd: null });
+    measurement.drawing = false;
+    canvas.style.cursor = "default";
+}
+
+function movePlayerToMouse() {
+    if (!followingPlayer || !lastMouse) return;
+    const point = screenToWorld(lastMouse.x, lastMouse.y);
+    playerView.x = point.x - playerView.width / 2;
+    playerView.y = point.y - playerView.height / 2;
+    requestRender();
+}
+
+function togglePlayerFollow() {
+    if (followingPlayer) {
+        movePlayerToMouse();
+        followingPlayer = null;
+        canvas.style.cursor = "default";
+        requestRender(); scheduleSave();
+        shortcutNotice("Visão do jogador fixada");
         return;
     }
-    if (event.key === "Escape") {
-        closePanels();
-        clearMeasurement();
-        setMode("select");
-        if (!isTyping) setTokenSelection([]);
-    }
-    if (hudVisible && !isTyping && event.key === "Delete") deleteSelectedToken();
-    if (hudVisible && !isTyping && (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "a") {
-        event.preventDefault(); setTokenSelection(tokens, tokens.at(-1) || null);
-    }
-    if (hudVisible && !isTyping && (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "d") {
-        event.preventDefault(); duplicateSelectedToken();
+    closePanels(); setMode("select");
+    canvas.focus({ preventScroll: true });
+    followingPlayer = { ...playerView };
+    if (!lastMouse) lastMouse = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+    canvas.style.cursor = "crosshair";
+    movePlayerToMouse();
+    shortcutNotice("Posicionando visão do jogador · Espaço fixa · Esc cancela", true);
+}
+
+function cancelPlayerFollow() {
+    if (!followingPlayer) return false;
+    Object.assign(playerView, followingPlayer);
+    followingPlayer = null;
+    canvas.style.cursor = "default";
+    requestRender(); scheduleSave();
+    shortcutNotice("Visão do jogador voltou à posição anterior");
+    return true;
+}
+
+function selectedBounds() {
+    return SHORTCUTS.bounds(selectedTokenList().map((token) => ({
+        x: token.x, y: token.y, width: token.width, height: getTokenHeight(token), rotation: token.rotation
+    })));
+}
+
+function centerPlayerOnSelection() {
+    const rect = selectedBounds();
+    if (!rect) { shortcutNotice("Selecione os tokens para centralizar a visão do jogador"); return; }
+    if (followingPlayer) cancelPlayerFollow();
+    playerView.x = rect.x - playerView.width / 2;
+    playerView.y = rect.y - playerView.height / 2;
+    requestRender(); scheduleSave();
+    shortcutNotice("Visão do jogador centralizada nos tokens");
+}
+
+function frameMasterCamera() {
+    let rect = selectedBounds();
+    if (!rect && mapState.loaded) rect = {
+        x: mapState.x, y: mapState.y,
+        width: mapState.image.width * mapState.scale, height: mapState.image.height * mapState.scale
+    };
+    if (!rect) { shortcutNotice("Importe um mapa ou selecione tokens para enquadrar"); return; }
+    Object.assign(camera, SHORTCUTS.fitCamera(rect, { width: window.innerWidth, height: window.innerHeight }, MIN_ZOOM, MAX_ZOOM));
+    requestRender(); scheduleSave();
+    shortcutNotice("Câmera do mestre enquadrada");
+}
+
+function toggleSelectedVisibility() {
+    const selection = selectedTokenList();
+    if (!selection.length) { shortcutNotice("Selecione os tokens que deseja ocultar ou revelar"); return; }
+    const visible = !selection.some((token) => token.visibleToPlayers !== false);
+    selection.forEach((token) => { token.visibleToPlayers = visible; });
+    updateTokenLibrary(); updateTokenInspector(); requestRender(); scheduleSave();
+    shortcutNotice(visible ? "Tokens revelados aos jogadores" : "Tokens ocultados dos jogadores");
+}
+
+function copySelectedTokens() {
+    const selection = selectedTokenList();
+    if (!selection.length) { shortcutNotice("Selecione tokens para copiar"); return; }
+    tokenClipboard = selection.map((token) => ({ ...token }));
+    pasteCount = 0;
+    shortcutNotice(`${selection.length} ${selection.length === 1 ? "token copiado" : "tokens copiados"} · Ctrl + V cola no mouse`);
+}
+
+async function pasteTokens() {
+    if (!tokenClipboard.length || sceneLoading) { shortcutNotice("Copie os tokens da mesa primeiro"); return; }
+    sceneLoading = true;
+    try {
+        const center = SHORTCUTS.bounds(tokenClipboard.map((token) => ({ ...token, height: getTokenHeight(token) })));
+        const point = lastMouse ? screenToWorld(lastMouse.x, lastMouse.y) : { x: -camera.x, y: -camera.y };
+        const offset = pasteCount++ * 24;
+        const copies = [];
+        for (const token of tokenClipboard) {
+            const copy = await createToken(token.source, token.name, {
+                ...token, id: nextTokenId++, x: token.x - center.x + point.x + offset,
+                y: token.y - center.y + point.y + offset, select: false, save: false
+            });
+            if (copy) copies.push(copy);
+        }
+        setTokenSelection(copies, copies.at(-1));
+        shortcutNotice("Tokens colados na mesa");
+    } finally { sceneLoading = false; scheduleSave(); }
+}
+
+function showShortcutHelp() {
+    if (followingPlayer) cancelPlayerFollow();
+    closePanels();
+    if (!$("shortcutHelp").open) $("shortcutHelp").showModal();
+}
+
+$("openShortcutHelp").addEventListener("click", showShortcutHelp);
+$("closeShortcutHelp").addEventListener("click", () => $("shortcutHelp").close());
+$("shortcutHelp").addEventListener("close", () => canvas.focus({ preventScroll: true }));
+$("shortcutHelp").addEventListener("click", (event) => {
+    if (event.target === $("shortcutHelp")) $("shortcutHelp").close();
+});
+$("undoScene").addEventListener("click", () => travelHistory("undo"));
+$("redoScene").addEventListener("click", () => travelHistory("redo"));
+window.addEventListener("blur", () => {
+    if (interaction.type) { resetInteraction(); scheduleSave(); }
+    cancelPlayerFollow();
+});
+document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") cancelPlayerFollow();
+});
+document.addEventListener("focusin", (event) => {
+    if (followingPlayer && event.target !== canvas && event.target !== document.body) cancelPlayerFollow();
+});
+
+window.addEventListener("keydown", (event) => {
+    const typingSelector = "input, textarea, select, [contenteditable]:not([contenteditable='false']), [role='textbox']";
+    if (event.target?.closest?.(typingSelector) || document.activeElement?.closest?.(typingSelector)) return;
+    if (document.querySelector("dialog[open]")) return;
+    const command = SHORTCUTS.command(event);
+    if (!command || !historyReady || sceneLoading) return;
+    const panelOpen = document.querySelector(".settings-panel:not([hidden])");
+    if (panelOpen && command !== "cancel") return;
+    if ((interaction.type || measurement.drawing) && command !== "cancel") return;
+    if (followingPlayer && !["follow-player", "center-player", "cancel", "help"].includes(command)) return;
+    event.preventDefault();
+    switch (command) {
+        case "follow-player": togglePlayerFollow(); break;
+        case "center-player": centerPlayerOnSelection(); break;
+        case "frame": frameMasterCamera(); break;
+        case "ruler": setMode(activeMode === "ruler" ? "select" : "ruler"); break;
+        case "show-grid":
+            gridSettings.visible = !gridSettings.visible;
+            updateGridUI(); requestRender(); scheduleSave();
+            shortcutNotice(gridSettings.visible ? "Grade visível" : "Grade oculta"); break;
+        case "snap-grid":
+            gridSettings.snapTokens = !gridSettings.snapTokens;
+            updateGridUI(); scheduleSave();
+            shortcutNotice(gridSettings.snapTokens ? "Encaixe na grade ativo" : "Encaixe na grade desativado"); break;
+        case "visibility": toggleSelectedVisibility(); break;
+        case "toggle-hud": toggleHud(); break;
+        case "copy": copySelectedTokens(); break;
+        case "paste": pasteTokens(); break;
+        case "undo": travelHistory("undo"); break;
+        case "redo": travelHistory("redo"); break;
+        case "delete": deleteSelectedToken(); break;
+        case "select-all": setTokenSelection(tokens, tokens.at(-1)); break;
+        case "duplicate": duplicateSelectedToken(); break;
+        case "help": showShortcutHelp(); break;
+        case "cancel":
+            if (panelOpen) { closePanels(); canvas.focus({ preventScroll: true }); break; }
+            if (cancelPlayerFollow()) { resetInteraction(); break; }
+            if (interaction.type || measurement.drawing) { resetInteraction(); scheduleSave(); }
+            clearMeasurement();
+            if (activeMode !== "select") setMode("select");
+            else setTokenSelection([]);
+            requestRender(); break;
     }
 });
 
@@ -1217,7 +1526,7 @@ function drawPlayerFrame() {
     ctx.fillRect(topLeft.x, topLeft.y, width, height);
     ctx.strokeRect(topLeft.x, topLeft.y, width, height);
     ctx.setLineDash([]);
-    const label = "ÁREA DOS JOGADORES";
+    const label = followingPlayer ? "POSICIONANDO VISÃO DO JOGADOR" : "ÁREA DOS JOGADORES";
     ctx.font = "700 11px Segoe UI, Arial";
     const labelWidth = ctx.measureText(label).width + 18;
     const labelX = Math.max(0, Math.min(window.innerWidth - labelWidth, topLeft.x));
@@ -1302,6 +1611,7 @@ function draw() {
         drawTokenSelections(); drawTokenControls(); drawMarqueeSelection(); drawMeasurement();
         drawPlayerFrame(); drawCornerMarks(); drawOverlay();
     }
+    if (!hudVisible && followingPlayer) drawPlayerFrame();
 }
 
 // Inicialização
@@ -1316,34 +1626,83 @@ async function initialize() {
         ? "Mesa restaurada automaticamente"
         : "Mesa vazia · importe um mapa PNG e seus tokens");
     updateEmptyTabletop();
+    sceneHistory.reset(captureSceneState());
+    historyReady = true;
+    updateHistoryUI();
     requestRender();
 }
 
 const tabletopReady = initialize();
+window.REAL_TABLETOP_CONTROLS = Object.freeze({
+    state: () => ({ ruler: activeMode === "ruler", snap: gridSettings.snapTokens,
+        following: Boolean(followingPlayer), hudVisible, selection: selectedTokenList().map((token) => ({ id: token.id, name: token.name, visible: token.visibleToPlayers })) }),
+    focusSelection: frameMasterCamera, toggleVisibility: toggleSelectedVisibility,
+    duplicate: duplicateSelectedToken, remove: deleteSelectedToken,
+    editSelection: () => closePanels("tokens"), toggleFollow: togglePlayerFollow
+});
 window.REAL_TABLETOP_MASTER = Object.freeze({
     ready: tabletopReady,
-    campaignKey: campaignId || "autosave",
+    campaignKey: tableId || "autosave",
+    sceneId: () => currentSceneId,
+    snapshot: serializeSession,
+    async flush() { clearTimeout(saveTimer); return saveSession(); },
+    async switchScene(sceneId) {
+        if (!WORKSPACE || sceneLoading) return false;
+        if (followingPlayer) cancelPlayerFollow();
+        resetInteraction();
+        if (!await this.flush()) throw new Error("A cena atual não pôde ser salva. Tente novamente.");
+        sceneLoading = true;
+        try {
+            const workspace = await WORKSPACE.activate(tableId || "autosave", sceneId);
+            const scene = WORKSPACE.active(workspace);
+            await applySession({ ...scene.session, sceneId: scene.id });
+            sceneHistory.reset(captureSceneState()); updateHistoryUI();
+            await saveSession("Cena carregada: " + scene.name);
+            window.dispatchEvent(new CustomEvent("real:scene-switched", { detail: { sceneId: scene.id, name: scene.name } }));
+            return true;
+        } finally { sceneLoading = false; }
+    },
+    captureThumbnail() {
+        drawPlayerPreview();
+        const thumbnail = document.createElement("canvas"); thumbnail.width = 320; thumbnail.height = 180;
+        thumbnail.getContext("2d").drawImage(previewCanvas, 0, 0, 320, 180);
+        return thumbnail.toDataURL("image/jpeg", .6);
+    },
     startPlayerStream() {
         if (playerStream) return playerStream;
         if (typeof previewCanvas.captureStream !== "function") return null;
         drawPlayerPreview();
-        playerStream = previewCanvas.captureStream(24);
-        playerStream.getVideoTracks().forEach((track) => {
-            if ("contentHint" in track) track.contentHint = "detail";
-        });
+        try {
+            playerStream = previewCanvas.captureStream(0);
+            playerStreamTrack = playerStream.getVideoTracks()[0] || null;
+            if (!playerStreamTrack || typeof playerStreamTrack.requestFrame !== "function") {
+                playerStream.getTracks().forEach((track) => track.stop());
+                playerStream = previewCanvas.captureStream(8);
+                playerStreamTrack = playerStream.getVideoTracks()[0] || null;
+            }
+        } catch {
+            playerStream = previewCanvas.captureStream(8);
+            playerStreamTrack = playerStream.getVideoTracks()[0] || null;
+        }
+        if (playerStreamTrack && "contentHint" in playerStreamTrack) playerStreamTrack.contentHint = "detail";
+        requestPlayerStreamFrame(true);
         return playerStream;
     },
     stopPlayerStream() {
         if (!playerStream) return;
+        clearTimeout(playerFrameTimer);
+        playerFrameTimer = null;
         playerStream.getTracks().forEach((track) => track.stop());
         playerStream = null;
+        playerStreamTrack = null;
+        lastPlayerFrameAt = 0;
     },
     capturePlayerFrame() {
         drawPlayerPreview();
         const published = document.createElement("canvas");
-        published.width = 800;
-        published.height = 450;
+        published.width = 720;
+        published.height = 405;
         published.getContext("2d").drawImage(previewCanvas, 0, 0, published.width, published.height);
-        return published.toDataURL("image/jpeg", 0.68);
+        return published.toDataURL("image/jpeg", 0.6);
     }
 });

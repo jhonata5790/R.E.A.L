@@ -26,7 +26,10 @@ Deno.serve(async (request: Request) => {
         }
         const body = await request.text();
         if (body.length > 1000) return json({ error: "Convite inválido" }, 400);
-        const inviteCode = JSON.parse(body).inviteCode;
+        const payload = JSON.parse(body);
+        const inviteCode = payload.inviteCode;
+        const knownPublishedAt = typeof payload.knownPublishedAt === "string" && payload.knownPublishedAt.length <= 64
+            ? payload.knownPublishedAt : null;
         if (typeof inviteCode !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(inviteCode)) {
             return json({ error: "Convite inválido" }, 400);
         }
@@ -45,9 +48,12 @@ Deno.serve(async (request: Request) => {
         const rooms = await response.json();
         if (!Array.isArray(rooms) || rooms.length === 0) return json({ error: "Convite não encontrado" }, 404);
         const room = rooms[0];
+        const live = room.is_live === true;
+        const unchanged = live && knownPublishedAt !== null && knownPublishedAt === room.published_at;
         return json({
-            live: room.is_live === true,
-            frame: room.is_live === true ? room.published_frame : null,
+            live,
+            unchanged,
+            frame: live && !unchanged ? room.published_frame : null,
             publishedAt: room.published_at,
         });
     } catch {

@@ -34,6 +34,7 @@
     }
 
     function showState() {
+        window.dispatchEvent(new Event("real:online-state"));
         authForm.hidden = !!user;
         controls.hidden = !user;
         if (!user) return;
@@ -94,6 +95,18 @@
         catch { /* Um candidato inválido não deve interromper a mesa. */ }
     }
 
+    async function tuneVideoSender(sender) {
+        if (!sender?.getParameters || !sender?.setParameters) return;
+        try {
+            const parameters = sender.getParameters();
+            if (!parameters.encodings?.length) parameters.encodings = [{}];
+            parameters.encodings[0].maxBitrate = 420000;
+            parameters.encodings[0].maxFramerate = 8;
+            parameters.degradationPreference = "maintain-resolution";
+            await sender.setParameters(parameters);
+        } catch { /* Alguns navegadores escolhem os limites automaticamente. */ }
+    }
+
     async function startPeer(viewerId) {
         if (!room?.is_live || !user || typeof RTCPeerConnection === "undefined") return;
         const existing = peers.get(viewerId);
@@ -109,7 +122,8 @@
         const sessionId = crypto.randomUUID();
         const peer = { connection, sessionId, pendingCandidates: [], createdAt: Date.now() };
         peers.set(viewerId, peer);
-        stream.getTracks().forEach((track) => connection.addTrack(track, stream));
+        const senders = stream.getTracks().map((track) => connection.addTrack(track, stream));
+        await Promise.all(senders.map(tuneVideoSender));
         connection.onicecandidate = (event) => {
             if (event.candidate) signal({ kind: "candidate", viewerId, sessionId, candidate: event.candidate.toJSON() });
         };
@@ -147,6 +161,16 @@
         closePeers();
         channelReady = false;
         channel = room ? client.channel(`real-tabletop:${room.invite_code}`)
+            .on("broadcast", { event: "changed" }, async () => {
+                if (!user || !room) return;
+                const id = room.id;
+                const { data, error } = await client.from("tabletop_rooms").select("id,invite_code,is_live,published_at").eq("id", id).eq("owner_id", user.id).maybeSingle();
+                if (error || !data || room?.id !== id) return;
+                const ended = room.is_live && !data.is_live;
+                room = data;
+                if (ended) { stopLiveStream(); window.dispatchEvent(new Event("real:tabletop-stopped")); }
+                showState();
+            })
             .on("broadcast", { event: "rtc" }, handleSignal)
             .on("broadcast", { event: "document-request" }, ({ payload }) => {
                 if (room?.is_live && /^[0-9a-f-]{36}$/i.test(payload?.viewerId || "")) {
@@ -161,6 +185,7 @@
 
     window.REAL_TABLETOP_ONLINE = {
         isLive: () => !!user && !!room?.is_live,
+        publish,
         async sendDocument(payload) {
             if (!user || !room?.is_live || !channel || !channelReady) return false;
             try {
@@ -325,6 +350,7 @@
         }
     });
     window.addEventListener("real:tabletop-changed", queuePublish);
+    window.addEventListener("real:scene-switched", () => { if (room?.is_live) publish(); });
     client.auth.onAuthStateChange((event, session) => {
         if (event === "SIGNED_OUT") setUser(null);
         else if (event === "SIGNED_IN" && session?.user?.id !== user?.id) {

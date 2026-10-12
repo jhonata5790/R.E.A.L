@@ -1,5 +1,5 @@
 const assert = require("node:assert/strict");
-const rules = require("../tabletop-selection.js");
+const rules = require("../assets/js/tabletop/tabletop-selection.js");
 
 const tokens = [
     { id: 1, x: 40, y: 60 },
