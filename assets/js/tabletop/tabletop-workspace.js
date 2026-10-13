@@ -26,7 +26,8 @@
         const state = controls.state();
         $("stateRuler").hidden = !state.ruler; $("stateSnap").hidden = !state.snap; $("stateFollow").hidden = !state.following;
         $("stateLive").classList.toggle("is-live", window.REAL_TABLETOP_ONLINE?.isLive() || false);
-        $("stateLive").textContent = window.REAL_TABLETOP_ONLINE?.isLive() ? "● Ao vivo" : "○ Offline";
+        $("stateLive").textContent = window.REAL_TABLETOP_ONLINE?.isLive()
+            ? window.REAL_TABLETOP_ONLINE?.isPaused?.() ? "Ⅱ Visão pausada" : "● Ao vivo" : "○ Offline";
         $("topbarFollow").setAttribute("aria-pressed", String(state.following));
         $("tokenQuickActions").hidden = !state.selection.length || !state.hudVisible;
         $("tokenQuickName").textContent = state.selection.length === 1 ? state.selection[0].name : `${state.selection.length} tokens selecionados`;

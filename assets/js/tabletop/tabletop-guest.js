@@ -7,6 +7,7 @@
     const video = document.getElementById("guestVideo");
     const waiting = document.getElementById("guestWaiting");
     const economyButton = document.getElementById("guestEconomy");
+    const qualitySelect = document.getElementById("guestQuality");
     const documentDialog = document.getElementById("guestDocument");
     const documentOpen = document.getElementById("guestDocumentOpen");
     const documentHandle = document.getElementById("guestDocumentHandle");
@@ -25,6 +26,7 @@
     const viewerId = crypto.randomUUID();
     let busy = false;
     let lastPublishedAt = null;
+    let renderedFrameStamp = null;
     let knownLive = false;
     let videoReady = false;
     let channelReady = false;
@@ -42,6 +44,10 @@
     let joinTimer = null;
     let refreshFailures = 0;
     let lastJoinRequestAt = 0;
+    let transmissionPaused = false, healthTimer = null, healthBusy = false, retryAttempt = 0;
+    let lastHealth = null, expectedPixels = false, nextJoinAt = 0, lastPresenceAt = 0;
+    let realtimeClient = null, presenceBusy = false, offerGeneration = 0;
+    let qualityMode = performanceRules.quality?.((() => { try { return localStorage.getItem("real-tabletop-quality"); } catch { return null; } })()) || "auto";
     let economyMode = performanceRules.prefersEconomy({
         stored: (() => { try { return localStorage.getItem("real-tabletop-economy"); } catch { return null; } })(),
         saveData: typeof navigator !== "undefined" && navigator.connection?.saveData === true,
@@ -49,6 +55,24 @@
         narrow: window.matchMedia?.("(max-width: 720px)")?.matches === true,
         coarse: window.matchMedia?.("(pointer: coarse)")?.matches === true
     });
+    const automaticEconomy = () => performanceRules.prefersEconomy({ saveData: navigator.connection?.saveData,
+        effectiveType: navigator.connection?.effectiveType, narrow: window.matchMedia?.("(max-width: 720px)")?.matches,
+        coarse: window.matchMedia?.("(pointer: coarse)")?.matches });
+    if (qualitySelect) economyMode = qualityMode === "economy" || qualityMode === "auto" && automaticEconomy();
+    const pointerController = window.REAL_POINTERS?.createGuest({ viewerId,
+        button: document.getElementById("guestPointerButton"), status: document.getElementById("guestPointerStatus"),
+        root: document.getElementById("guestPointers"), stage: document.querySelector(".guest-tabletop__stage"),
+        source: () => videoReady ? video : frame.hidden || !renderedFrameStamp ? null : frame,
+        send: async (event, payload) => {
+            if (knownLive && channelReady && channel) return channel.send({ type: "broadcast", event, payload });
+        } });
+    function updatePointerDisplay() {
+        pointerController?.setDisplay({ live: knownLive, ready: channelReady && document.visibilityState !== "hidden",
+            video: videoReady, stamp: renderedFrameStamp, paused: transmissionPaused });
+    }
+    window.REAL_GUEST_VIEW = { pointing: () => pointerController?.isArmed() === true,
+        cancelGesture: () => pointerController?.cancelGesture(), reflow: () => pointerController?.reflow() };
+    frame.addEventListener?.("load", () => { renderedFrameStamp = lastPublishedAt; updatePointerDisplay(); });
 
     function paginateDocument() {
         if (!hasDocument || documentText.hidden) { documentPages.hidden = true; return; }
@@ -235,7 +259,7 @@
             .catch(() => { documentRequested = false; });
     }
 
-    function say(message) { status.textContent = message; }
+    function say(message) { status.textContent = transmissionPaused && knownLive ? "Visão pausada · o mestre está preparando a próxima cena" : message; }
 
     function fallbackMessage() {
         if (economyMode) return "Modo econômico · a imagem atualiza quando a mesa mudar";
@@ -250,35 +274,52 @@
         frame.hidden = !knownLive || !frame.src;
         waiting.hidden = !frame.hidden;
         if (knownLive) say(fallbackMessage());
+        updatePointerDisplay();
     }
 
     function closePeer() {
+        offerGeneration++;
         const current = peer;
         peer = null;
+        if (current && knownLive) signal({ kind: "leave", viewerId, sessionId: current.sessionId });
         if (current) current.connection.close();
         video.srcObject = null;
+        lastHealth = null; expectedPixels = false;
         pendingCandidates = [];
         showFallback();
     }
 
     function showEconomyMode() {
+        if (qualitySelect) qualitySelect.value = qualityMode;
         economyButton.setAttribute("aria-pressed", String(economyMode));
         economyButton.querySelector("strong").textContent = economyMode ? "Economia ativa" : "Vídeo ao vivo";
         economyButton.querySelector("small").textContent = economyMode ? "Poupa dados e bateria" : "Mais movimento";
     }
 
     function setEconomyMode(enabled) {
+        qualityMode = enabled ? "economy" : "balanced";
         economyMode = Boolean(enabled);
         try { localStorage.setItem("real-tabletop-economy", economyMode ? "on" : "off"); }
         catch { /* A preferência vale somente nesta visita. */ }
+        try { localStorage.setItem("real-tabletop-quality", qualityMode); } catch { /* session only */ }
         showEconomyMode();
         if (economyMode) closePeer();
         else requestJoin(true);
         scheduleJoin();
+        updatePresence(true);
+    }
+    function setQuality(mode) {
+        qualityMode = performanceRules.quality?.(mode) || "auto";
+        economyMode = qualityMode === "economy" || qualityMode === "auto" && automaticEconomy();
+        try { localStorage.setItem("real-tabletop-quality", qualityMode); } catch { /* session only */ }
+        preserveLastFrame();
+        closePeer(); retryAttempt = 0; nextJoinAt = 0;
+        showEconomyMode(); requestJoin(true); scheduleJoin(); updatePresence(true);
     }
 
     function showWaiting(message) {
         knownLive = false;
+        transmissionPaused = false; retryAttempt = 0; nextJoinAt = 0;
         documentRequested = false;
         clearDocument();
         if (presenceTracked && channel) { presenceTracked = false; channel.untrack().catch(() => {}); }
@@ -288,6 +329,8 @@
         frame.removeAttribute("src");
         waiting.hidden = false;
         if (message) say(message);
+        pointerController?.setAuthority(null);
+        updatePointerDisplay();
     }
 
     async function signal(payload) {
@@ -299,10 +342,11 @@
     function requestJoin(force = false) {
         if (economyMode || document.visibilityState === "hidden" || peer) return;
         const now = Date.now();
-        if (!force && now - lastJoinRequestAt < 8000) return;
+        if (!force && (now < nextJoinAt || now - lastJoinRequestAt < 2000)) return;
         if (knownLive && channelReady && !videoReady && typeof RTCPeerConnection !== "undefined") {
             lastJoinRequestAt = now;
-            signal({ kind: "join", viewerId });
+            nextJoinAt = now + (performanceRules.retryDelay?.(retryAttempt++) || 8000);
+            signal({ kind: "join", viewerId, quality: qualityMode, force });
         }
     }
 
@@ -312,18 +356,26 @@
         joinTimer = setTimeout(() => {
             requestJoin();
             scheduleJoin();
-        }, 8000);
+        }, 2000);
     }
 
     async function updatePresence(force = false) {
-        if (!knownLive || !channelReady || !channel || (presenceTracked && !force)) return;
+        if (!knownLive || !channelReady || !channel || presenceBusy || (presenceTracked && !force)) return;
         const name = window.REAL_VISITOR_NAME?.getName();
         if (!name) return;
         presenceTracked = true;
+        presenceBusy = true;
         try {
-            await channel.track({ role: "viewer", name });
+            const pointerKey = await pointerController?.identityReady;
+            if (!knownLive || !channelReady || (document.visibilityState === "hidden" && !pointerController)) { presenceTracked = false; return; }
+            const transmission = { state: document.visibilityState === "hidden" ? "hidden" : economyMode ? "economy" : videoReady ? "video" : peer ? "reconnecting" : "image",
+                quality: qualityMode, at: Date.now(), paused: transmissionPaused };
+            if (pointerKey) await channel.track({ role: "viewer", name, viewerId, pointerKey, transmission });
+            else await channel.track({ role: "viewer", name });
+            lastPresenceAt = Date.now();
             if (!knownLive) { presenceTracked = false; await channel.untrack(); }
         } catch { presenceTracked = false; }
+        finally { presenceBusy = false; }
     }
 
     async function addCandidate(candidate) {
@@ -353,25 +405,29 @@
         if (peer?.sessionId === payload.sessionId) return;
         const earlyCandidates = pendingCandidates.filter((item) => item.sessionId === payload.sessionId);
         closePeer();
-        const connection = new RTCPeerConnection({ iceServers });
-        peer = { connection, sessionId: payload.sessionId };
+        const generation = offerGeneration;
+        const ice = await window.REAL_TABLETOP_ICE?.get(inviteCode);
+        if (generation !== offerGeneration || !knownLive || economyMode || document.visibilityState === "hidden") return;
+        const connection = new RTCPeerConnection({ iceServers: ice?.iceServers || iceServers });
+        peer = { connection, sessionId: payload.sessionId, createdAt: Date.now() };
         pendingCandidates = earlyCandidates;
         connection.onicecandidate = (event) => {
             if (event.candidate) signal({ kind: "candidate", viewerId, sessionId: payload.sessionId, candidate: event.candidate.toJSON() });
         };
         connection.ontrack = (event) => {
+            if (peer?.connection !== connection) return;
             video.srcObject = event.streams[0] || new MediaStream([event.track]);
             video.play().catch(() => showFallback());
         };
         connection.onconnectionstatechange = () => {
             if (peer?.connection !== connection) return;
             if (connection.connectionState === "failed" || connection.connectionState === "closed") {
-                closePeer();
+                preserveLastFrame(); closePeer();
                 requestJoin();
             } else if (connection.connectionState === "disconnected") {
                 setTimeout(() => {
                     if (peer?.connection === connection && connection.connectionState === "disconnected") {
-                        closePeer();
+                        preserveLastFrame(); closePeer();
                         requestJoin();
                     }
                 }, 4000);
@@ -384,17 +440,58 @@
             await signal({ kind: "answer", viewerId, sessionId: payload.sessionId,
                 description: { type: connection.localDescription.type, sdp: connection.localDescription.sdp } });
         } catch {
-            closePeer();
+            if (peer?.connection === connection) closePeer();
         }
+    }
+
+    function preserveLastFrame() {
+        if (!videoReady || !(video.videoWidth > 0) || !document.createElement) return;
+        try {
+            const snapshot = document.createElement("canvas"); snapshot.width = 720; snapshot.height = 405;
+            snapshot.getContext("2d").drawImage(video, 0, 0, 720, 405);
+            // A freeze is a visual reserve, not authority to point in a potentially old scene.
+            renderedFrameStamp = null; frame.src = snapshot.toDataURL("image/jpeg", .65);
+        } catch { /* Existing published image remains available. */ }
+    }
+    function recover() {
+        preserveLastFrame();
+        closePeer(); requestJoin(); updatePresence(true);
+    }
+    async function checkHealth() {
+        if (document.visibilityState === "hidden" || !knownLive || healthBusy) return;
+        if (Date.now() - lastPresenceAt > 10000) updatePresence(true);
+        const current = peer;
+        if (!current) return;
+        if (!videoReady && Date.now() - current.createdAt > 15000) { recover(); return; }
+        if (!current.connection.getStats || !videoReady) return;
+        healthBusy = true;
+        try {
+            const stats = await current.connection.getStats();
+            if (peer !== current) return;
+            stats.forEach((report) => {
+                if (report.type !== "inbound-rtp" || (report.kind || report.mediaType) !== "video"
+                    || !Number.isFinite(report.framesDecoded)) return;
+                const sample = { bytes: report.bytesReceived || 0, frames: report.framesDecoded, at: Date.now() };
+                const health = performanceRules.receiverHealth?.(lastHealth, sample, transmissionPaused) || { stale: 0 };
+                if (lastHealth && sample.frames > lastHealth.frames) { expectedPixels = false; retryAttempt = 0; }
+                // Demand-rendered static scenes can legitimately produce no new decoded frames.
+                if (health.frozen && expectedPixels) recover();
+                else lastHealth = { ...sample, stale: health.stale };
+            });
+        } catch { /* Some browsers cannot inspect video counters. ICE state still reconnects. */ }
+        finally { healthBusy = false; }
     }
 
     video.addEventListener("playing", () => {
         if (economyMode || document.visibilityState === "hidden") { closePeer(); return; }
         videoReady = true;
+        retryAttempt = 0; nextJoinAt = 0;
         video.hidden = false;
         frame.hidden = true;
         waiting.hidden = true;
         say("Transmissão ao vivo · somente observação");
+        updatePointerDisplay();
+        updatePresence(true);
     });
 
     if (!validCode) { showWaiting("Convite ausente ou inválido."); return; }
@@ -426,19 +523,26 @@
             refreshFailures = 0;
             if (!view.live) {
                 lastPublishedAt = null;
+        renderedFrameStamp = null;
                 showWaiting("Aguardando o mestre iniciar a transmissão…");
                 return;
             }
             if (!knownLive) liveSince = Date.now();
             knownLive = true;
+            transmissionPaused = view.paused === true;
             if (!view.unchanged && typeof view.frame === "string" && view.frame) {
-                frame.src = view.frame;
+                if (lastPublishedAt && lastPublishedAt !== view.publishedAt) expectedPixels = true;
+                renderedFrameStamp = null;
                 lastPublishedAt = view.publishedAt;
+                frame.src = view.frame;
             }
-            waiting.hidden = !frame.src;
+            waiting.hidden = Boolean(frame.src);
             frame.hidden = videoReady || !frame.src;
             if (!videoReady) say(fallbackMessage());
-            updatePresence();
+            updatePointerDisplay();
+            await updatePresence();
+            await pointerController?.setAuthority(view.pointerAuthority || null);
+            pointerController?.hello().catch(() => {});
             requestJoin();
             requestDocument();
         } catch {
@@ -450,18 +554,38 @@
         }
     }
 
-    if (window.supabase?.createClient) {
-        const client = window.supabase.createClient(config.url, config.publishableKey, { auth: { persistSession: false } });
-        channel = client.channel(`real-tabletop:${inviteCode}`)
+    function attachGuestChannel() {
+        if (!realtimeClient) return;
+        if (channel) realtimeClient.removeChannel(channel);
+        channelReady = false; presenceTracked = false;
+        channel = realtimeClient.channel(`real-tabletop:${inviteCode}`)
             .on("broadcast", { event: "changed" }, () => refresh())
             .on("broadcast", { event: "rtc" }, handleSignal)
+            .on("broadcast", { event: "pointer-state" }, ({ payload }) => pointerController?.receive(payload).catch(() => false))
             .on("broadcast", { event: "document" }, handleDocument)
             .subscribe((state) => {
                 channelReady = state === "SUBSCRIBED";
+                updatePointerDisplay();
                 if (!channelReady) { presenceTracked = false; documentRequested = false; }
-                if (channelReady) { requestJoin(); updatePresence(); requestDocument(); scheduleRefresh(); }
+                if (channelReady) {
+                    requestJoin(); updatePresence().then(() => pointerController?.hello()).catch(() => {});
+                    requestDocument(); scheduleRefresh();
+                }
             });
     }
+    if (window.supabase?.createClient) {
+        realtimeClient = window.supabase.createClient(config.url, config.publishableKey, { auth: { persistSession: false } });
+        attachGuestChannel();
+    }
+    qualitySelect?.addEventListener("change", () => setQuality(qualitySelect.value));
+    document.getElementById("guestReconnect")?.addEventListener("click", () => {
+        retryAttempt = 0; nextJoinAt = 0; lastJoinRequestAt = 0;
+        preserveLastFrame(); closePeer();
+        if (!channelReady) attachGuestChannel();
+        refresh(); requestJoin(true); say("Reconectando · sua última imagem continua disponível…");
+    });
+    if (typeof navigator !== "undefined") navigator.connection?.addEventListener?.("change", () => { if (qualityMode === "auto") setQuality("auto"); });
+    healthTimer = setInterval(checkHealth, 3000);
     economyButton.addEventListener("click", () => setEconomyMode(!economyMode));
     showEconomyMode();
     window.REAL_VISITOR_NAME?.ready.then(() => { refresh(); updatePresence(); });
@@ -470,19 +594,24 @@
     scheduleJoin();
     document.addEventListener("visibilitychange", () => {
         if (document.visibilityState === "hidden") {
+            updatePointerDisplay();
             clearTimeout(refreshTimer);
             clearTimeout(joinTimer);
-            if (presenceTracked && channel) { presenceTracked = false; channel.untrack().catch(() => {}); }
+            if (!pointerController && presenceTracked && channel) { presenceTracked = false; channel.untrack().catch(() => {}); }
             closePeer();
+            if (pointerController) updatePresence(true);
             return;
         }
         refresh();
+        pointerController?.hello().catch(() => {});
         requestJoin(true);
         scheduleJoin();
     });
     window.addEventListener("pagehide", () => {
+        pointerController?.setDisplay({ live: false });
         clearTimeout(refreshTimer);
         clearTimeout(joinTimer);
+        clearInterval(healthTimer);
         if (presenceTracked && channel) channel.untrack().catch(() => {});
         closePeer();
     });

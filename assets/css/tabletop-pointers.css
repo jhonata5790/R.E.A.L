@@ -1,0 +1,21 @@
+.tabletop-pointers { position: fixed; inset: 0; z-index: 10; overflow: hidden; pointer-events: none; }
+.tabletop-pointer { position: absolute; width: 26px; height: 26px; margin: -13px 0 0 -13px; border: 3px solid var(--pointer-color); border-radius: 50%; background: #100b1299; box-shadow: 0 0 0 2px #100b12, 0 0 20px var(--pointer-color); }
+.tabletop-pointer::before, .tabletop-pointer::after { content: ""; position: absolute; inset: -3px; border: 2px solid var(--pointer-color); border-radius: 50%; animation: tabletop-pointer-pulse 1s ease-out infinite; }
+.tabletop-pointer::after { animation-delay: .5s; }
+.tabletop-pointer span { position: absolute; top: 33px; left: 50%; transform: translateX(-50%); max-width: 160px; overflow: hidden; text-overflow: ellipsis; padding: 4px 8px; color: #fff; background: #100b12ed; border: 1px solid var(--pointer-color); border-radius: 5px; font: 600 11px/1.3 "Segoe UI", Arial, sans-serif; white-space: nowrap; }
+.tabletop-pointer[hidden] { display: none; }
+.viewer-pointer-permission { display: flex; align-items: center; justify-content: space-between; gap: 9px; }
+.viewer-pointer-permission { flex-wrap: wrap; }
+.viewer-connection { display: block; flex-basis: 100%; color: #b9d5c4; font: 10px/1.5 "Segoe UI", Arial, sans-serif; }
+.viewer-pointer-permission > span { overflow: hidden; text-overflow: ellipsis; }
+.viewer-pointer-permission label { display: flex; flex-shrink: 0; align-items: center; gap: 5px; color: #f7d5e0; font: 10px/1.4 "Segoe UI", Arial, sans-serif; cursor: pointer; }
+.viewer-pointer-permission input { accent-color: #fb7185; width: 17px; height: 17px; }
+.viewer-pointer-hint { margin: 8px 0; color: #ccb5c1; font: 10px/1.6 "Segoe UI", Arial, sans-serif; }
+.guest-pointer-button { min-height: 42px; padding: 8px 12px; color: #f5e1eb; background: #342337; border: 1px solid #b476a6; border-radius: 9px; font: 600 12px "Segoe UI", Arial, sans-serif; cursor: pointer; }
+.guest-pointer-button[aria-pressed="true"] { color: #100b12; background: #d9b2df; }
+.guest-pointer-button:disabled { opacity: .55; cursor: wait; }
+.guest-pointer-status { margin: 0; padding: 8px 16px; color: #dfbddf; text-align: center; font: 11px/1.5 "Segoe UI", Arial, sans-serif; }
+.guest-pointer-button[hidden], .guest-pointer-status[hidden] { display: none; }
+.guest-tabletop__stage.is-pointing { cursor: crosshair; touch-action: none; }
+@keyframes tabletop-pointer-pulse { from { opacity: .9; transform: scale(1); } to { opacity: 0; transform: scale(2.4); } }
+@media (prefers-reduced-motion: reduce) { .tabletop-pointer::before, .tabletop-pointer::after { animation: none; } }

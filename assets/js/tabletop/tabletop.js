@@ -28,6 +28,23 @@ let playerStream = null;
 let playerStreamTrack = null;
 let playerFrameTimer = null;
 let lastPlayerFrameAt = 0;
+// A prévia local é um rascunho. Só este canvas separado pode sair para os jogadores.
+let publicationCanvas = null;
+let publicationPaused = false;
+let publicationHeartbeat = null;
+let publicationView = null;
+function transmissionCanvas() {
+    if (!publicationCanvas) {
+        publicationCanvas = document.createElement("canvas");
+        publicationCanvas.width = 1280; publicationCanvas.height = 720;
+    }
+    return publicationCanvas;
+}
+function updatePublication() {
+    if (publicationPaused) return;
+    transmissionCanvas().getContext("2d").drawImage(previewCanvas, 0, 0);
+    publicationView = { ...playerView, sceneId: currentSceneId };
+}
 
 const THEME = { background: "#070509", grid: "#cd263d", accent: "#fb3b53", accentSoft: "#fecdd3" };
 const DEFAULT_GRID = { visible: false, snapTokens: false, size: 50, opacity: 0.32, offsetX: 0, offsetY: 0, metersPerSquare: 3 };
@@ -150,13 +167,16 @@ function requestRender() {
 function requestPlayerStreamFrame(force = false) {
     if (!playerStreamTrack || typeof playerStreamTrack.requestFrame !== "function") return;
     const now = performance.now();
-    const wait = Math.max(0, 125 - (now - lastPlayerFrameAt));
+    const wait = Math.max(0, 67 - (now - lastPlayerFrameAt));
     if (force || wait === 0) {
         clearTimeout(playerFrameTimer);
         playerFrameTimer = null;
         lastPlayerFrameAt = now;
         try { playerStreamTrack.requestFrame(); }
         catch { /* O fallback automático do navegador mantém a transmissão. */ }
+        // Manual capture is fulfilled on canvas paint. Repaint the already-public pixels,
+        // including during a pause, without ever copying the private draft.
+        if (publicationCanvas) publicationCanvas.getContext("2d").drawImage(publicationCanvas, 0, 0);
         return;
     }
     if (!playerFrameTimer) {
@@ -847,6 +867,7 @@ canvas.addEventListener("mousedown", (event) => {
 });
 
 canvas.addEventListener("mousemove", (event) => {
+    if (window.REAL_TABLETOP_ONLINE?.isPointing?.()) return;
     lastMouse = { x: event.clientX, y: event.clientY };
     const point = screenToWorld(event.clientX, event.clientY);
     if (measurement.drawing) {
@@ -1598,6 +1619,7 @@ function drawPlayerPreview() {
         }
     });
     previewCtx.restore();
+    updatePublication();
 }
 
 function draw() {
@@ -1644,6 +1666,28 @@ window.REAL_TABLETOP_MASTER = Object.freeze({
     ready: tabletopReady,
     campaignKey: tableId || "autosave",
     sceneId: () => currentSceneId,
+    pointerView: () => publicationPaused && publicationView ? { ...publicationView } : ({ ...playerView, sceneId: currentSceneId }),
+    pointOnScreen: worldToScreen,
+    pointInWorld: screenToWorld,
+    isTransmissionPaused: () => publicationPaused,
+    setTransmissionPaused(paused) {
+        if (paused && !publicationPaused) drawPlayerPreview();
+        publicationPaused = Boolean(paused);
+        if (!publicationPaused) { drawPlayerPreview(); requestPlayerStreamFrame(true); }
+        window.dispatchEvent(new Event("real:transmission-pause"));
+    },
+    async restorePublishedFrame(source) {
+        if (!publicationPaused) return;
+        // A reloaded paused room must never fall back to the current private draft.
+        const output = transmissionCanvas(), outputContext = output.getContext("2d");
+        outputContext.fillStyle = THEME.background; outputContext.fillRect(0, 0, output.width, output.height);
+        publicationView = null;
+        if (!/^data:image\/jpeg;base64,/.test(source || "")) return;
+        const image = new Image();
+        let loaded = false;
+        await new Promise((resolve) => { image.onload = () => { loaded = true; resolve(); }; image.onerror = resolve; image.src = source; });
+        if (publicationPaused && loaded && image.width) outputContext.drawImage(image, 0, 0, 1280, 720);
+    },
     snapshot: serializeSession,
     async flush() { clearTimeout(saveTimer); return saveSession(); },
     async switchScene(sceneId) {
@@ -1670,27 +1714,30 @@ window.REAL_TABLETOP_MASTER = Object.freeze({
     },
     startPlayerStream() {
         if (playerStream) return playerStream;
-        if (typeof previewCanvas.captureStream !== "function") return null;
+        const output = transmissionCanvas();
+        if (typeof output.captureStream !== "function") return null;
         drawPlayerPreview();
         try {
-            playerStream = previewCanvas.captureStream(0);
+            playerStream = output.captureStream(0);
             playerStreamTrack = playerStream.getVideoTracks()[0] || null;
             if (!playerStreamTrack || typeof playerStreamTrack.requestFrame !== "function") {
                 playerStream.getTracks().forEach((track) => track.stop());
-                playerStream = previewCanvas.captureStream(8);
+                playerStream = output.captureStream(15);
                 playerStreamTrack = playerStream.getVideoTracks()[0] || null;
             }
         } catch {
-            playerStream = previewCanvas.captureStream(8);
+            playerStream = output.captureStream(15);
             playerStreamTrack = playerStream.getVideoTracks()[0] || null;
         }
         if (playerStreamTrack && "contentHint" in playerStreamTrack) playerStreamTrack.contentHint = "detail";
         requestPlayerStreamFrame(true);
+        publicationHeartbeat = setInterval(() => requestPlayerStreamFrame(true), 3000);
         return playerStream;
     },
     stopPlayerStream() {
         if (!playerStream) return;
         clearTimeout(playerFrameTimer);
+        clearInterval(publicationHeartbeat); publicationHeartbeat = null;
         playerFrameTimer = null;
         playerStream.getTracks().forEach((track) => track.stop());
         playerStream = null;
@@ -1702,7 +1749,13 @@ window.REAL_TABLETOP_MASTER = Object.freeze({
         const published = document.createElement("canvas");
         published.width = 720;
         published.height = 405;
-        published.getContext("2d").drawImage(previewCanvas, 0, 0, published.width, published.height);
+        published.getContext("2d").drawImage(transmissionCanvas(), 0, 0, published.width, published.height);
         return published.toDataURL("image/jpeg", 0.6);
+    },
+    captureDraftFrame() {
+        drawPlayerPreview();
+        const draft = document.createElement("canvas"); draft.width = 720; draft.height = 405;
+        draft.getContext("2d").drawImage(previewCanvas, 0, 0, 720, 405);
+        return draft.toDataURL("image/jpeg", .6);
     }
 });

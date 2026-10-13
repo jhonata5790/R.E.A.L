@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#09070b">
+    <meta name="description" content="Apoie o R.E.A.L com uma doação voluntária via Pix. Qualquer valor ajuda; não é preciso criar uma conta.">
+    <title>Apoie o R.E.A.L | Qualquer valor ajuda</title>
+    <meta name="robots" content="noindex, follow">
+    <link rel="icon" href="assets/images/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="assets/css/portal.css?v=20261013-donations">
+    <link rel="stylesheet" href="assets/css/donations.css?v=20261013-donations">
+</head>
+<body>
+    <div class="portal-shell donation-shell">
+        <header class="portal-header">
+            <a class="portal-brand" href="index.html#inicio" aria-label="R.E.A.L: início"><span class="portal-brand__mark" aria-hidden="true">✦</span><span><strong>R.E.A.L</strong><small>TABLETOP ONLINE</small></span></a>
+            <a class="donation-back" href="index.html#inicio">← Voltar às mesas</a>
+        </header>
+        <main class="donation-main" id="conteudo">
+            <div class="donation-layout">
+                <section class="donation-intro" aria-labelledby="donationTitle">
+                    <span class="eyebrow">FEITO PARA O SEU GRUPO</span>
+                    <h1 id="donationTitle">Toda boa história<br>precisa de <em>uma mesa.</em></h1>
+                    <p class="donation-lead">Ajude a manter o R.E.A.L em movimento.</p>
+                    <p class="donation-description">Se o site faz parte das suas sessões, você pode apoiar o projeto com qualquer valor. Cada contribuição ajuda a cuidar do que já existe e a preparar as próximas melhorias.</p>
+                    <div class="donation-pill"><span aria-hidden="true">♡</span> Apoio voluntário. Sem cadastro. Sem assinatura.</div>
+                    <div class="donation-benefits" aria-label="Como seu apoio ajuda">
+                        <div><span aria-hidden="true">◈</span><h2>Cuidar da mesa</h2><p>Manutenção e correções para continuar jogando.</p></div>
+                        <div><span aria-hidden="true">✦</span><h2>Preparar o próximo capítulo</h2><p>Melhorias nas ferramentas e na experiência do grupo.</p></div>
+                    </div>
+                    <p class="donation-reassurance">Sua presença já faz parte disso. <strong>Doar não é necessário para usar o site.</strong></p>
+                </section>
+                <section class="donation-card" aria-labelledby="pixTitle">
+                    <div class="donation-card__heading"><span class="eyebrow">APOIE O R.E.A.L</span><span class="donation-method">Pix</span></div>
+                    <h2 id="pixTitle">Qualquer valor ajuda.</h2>
+                    <p class="donation-card__description">Escolha o valor no app do seu banco.</p>
+                    <div class="donation-qr"><img id="pixQr" src="assets/images/apoio-pix.png" width="456" height="456" alt="QR Code Pix para apoiar o R.E.A.L, sem valor definido, recebedor informado JHONATA MIRANDA SANTOS"></div>
+                    <p class="donation-qr-caption">Escaneie no app do banco ou copie o código abaixo.</p>
+                    <div class="donation-recipient"><span>RECEBEDOR INFORMADO NO CÓDIGO</span><strong>JHONATA MIRANDA SANTOS</strong><small>Confira o destinatário no banco antes de confirmar.</small></div>
+                    <label class="sr-only" for="pixCode">Código Pix Copia e Cola</label>
+                    <textarea id="pixCode" class="donation-code" rows="3" readonly spellcheck="false" autocapitalize="off" autocomplete="off">00020101021126580014br.gov.bcb.pix0136d8b9789a-1fa3-4b59-8534-0b8571d0c4625204000053039865802BR5922JHONATA MIRANDA SANTOS6008BRASILIA62070503***63044784</textarea>
+                    <button id="copyPix" class="button button--primary button--wide donation-copy" type="button" hidden>Copiar Pix Copia e Cola <span aria-hidden="true">↗</span></button>
+                    <p id="pixStatus" class="donation-status" role="status" aria-live="polite"></p>
+                    <noscript><p class="donation-noscript">Selecione e copie o código acima, ou escaneie o QR Code no aplicativo do banco.</p></noscript>
+                    <div class="donation-safety"><span aria-hidden="true">✓</span><p>O pagamento é feito no seu banco. O R.E.A.L não pede senha bancária nem confirma pagamentos automaticamente.</p></div>
+                </section>
+            </div>
+            <section class="donation-how" aria-labelledby="donationHowTitle">
+                <div><span class="eyebrow">NO SEU TEMPO, DO SEU JEITO</span><h2 id="donationHowTitle">É simples apoiar.</h2></div>
+                <ol><li><span>01</span><p><strong>Abra o Pix do seu banco</strong>Use o leitor de QR Code ou Pix Copia e Cola.</p></li><li><span>02</span><p><strong>Escolha quanto quer doar</strong>Não há um valor definido no código.</p></li><li><span>03</span><p><strong>Confira antes de confirmar</strong>Verifique o recebedor e o valor no banco.</p></li></ol>
+            </section>
+        </main>
+        <footer class="portal-footer"><span>R.E.A.L</span><small>Obrigado por fazer parte da mesa.</small></footer>
+    </div>
+    <script src="assets/js/portal/donations.js?v=20261013-donations"></script>
+</body>
+</html>

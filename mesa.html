@@ -8,8 +8,11 @@
     >
 
     <title>Mesa tática | R.E.A.L</title>
+    <meta name="robots" content="noindex, nofollow">
+    <link rel="icon" href="assets/images/favicon.svg" type="image/svg+xml">
 
-    <link rel="stylesheet" href="assets/css/tabletop.css?v=20261012-workspace">
+    <link rel="stylesheet" href="assets/css/tabletop.css?v=20261012-pointers">
+    <link rel="stylesheet" href="assets/css/tabletop-pointers.css?v=20261013-transmission">
     <link rel="stylesheet" href="assets/css/visitor-name.css?v=20260928-visitor">
     <script src="assets/js/shared/visitor-name.js?v=20260928-visitor"></script>
 </head>
@@ -19,6 +22,7 @@
     <main id="tabletop">
 
         <canvas id="gameCanvas" tabindex="0" aria-label="Mapa da mesa"></canvas>
+        <div id="masterPointers" class="tabletop-pointers" aria-hidden="true"></div>
         <header class="tabletop-topbar"><div class="tabletop-topbar__identity"><strong id="topbarTableName">Minha mesa</strong><label><span class="sr-only">Cena em uso</span><select id="activeSceneSelect" aria-label="Trocar de cena"><option>Carregando cenas…</option></select></label></div><div class="tabletop-states"><span id="stateRuler" hidden>Régua ativa</span><span id="stateSnap" hidden>Encaixe ativo</span><span id="stateFollow" hidden>Visão segue o mouse</span></div><div class="tabletop-topbar__actions"><button id="topbarFollow" type="button" title="Posicionar visão do jogador (Espaço)">Visão do jogador</button><button id="topbarTransmission" type="button"><span id="stateLive">○ Offline</span></button></div></header>
         <section id="tokenQuickActions" class="token-quick-actions" aria-label="Ações da seleção" hidden><strong id="tokenQuickName">Token selecionado</strong><div><button id="quickTokenFocus" type="button" title="Enquadrar seleção (F)">Enquadrar</button><button id="quickTokenVisibility" type="button" title="Ocultar ou revelar (H)">Ocultar</button><button id="quickTokenDuplicate" type="button">Duplicar</button><button id="quickTokenEdit" type="button">Detalhes</button><button id="quickTokenDelete" class="is-danger" type="button">Remover</button></div></section>
 
@@ -43,6 +47,7 @@
             <div class="viewer-peek__heading"><h2 id="viewerPeekTitle">Assistindo à mesa</h2><button id="closeViewerPeek" type="button" aria-label="Fechar lista de espectadores">×</button></div>
             <p class="viewer-peek__count">Espectadores <span id="onlineViewerCount" role="status" aria-live="polite">(0)</span></p>
             <ul id="onlineViewerList"><li>Ninguém está assistindo.</li></ul>
+            <p id="pointerMasterHint" class="viewer-pointer-hint">Cada jogador precisa da sua permissão para apontar.</p>
         </section>
 
         <dialog id="hudMenu" class="hud-menu" aria-labelledby="hudCampaignName">
@@ -470,6 +475,12 @@
                 <div id="onlineMasterControls" class="tabletop-online__controls" hidden>
                     <p id="onlineMasterName" class="tabletop-online__account"></p>
                     <button id="onlineToggle" type="button">Iniciar transmissão</button>
+                    <div class="tabletop-online__actions">
+                        <button id="onlinePause" type="button" disabled>Pausar visão</button>
+                        <button id="onlinePoint" type="button" aria-pressed="false" disabled>◎ Apontar como mestre</button>
+                    </div>
+                    <p id="onlinePauseStatus" class="settings-hint" role="status">Ao pausar, os jogadores continuam vendo o último quadro. Sua prévia local vira um rascunho.</p>
+                    <p id="onlineRelayStatus" class="settings-hint">Verificando conexão alternativa…</p>
                     <label for="onlineInvite">Convite dos jogadores</label>
                     <div class="tabletop-online__invite">
                         <input id="onlineInvite" type="text" readonly aria-label="Link de convite dos jogadores">
@@ -484,7 +495,7 @@
         <dialog id="playerPreview" class="player-preview" aria-labelledby="playerPreviewTitle">
             <div class="player-preview__header"><div><span>PRÉVIA LOCAL</span><h2 id="playerPreviewTitle">Visão dos jogadores</h2></div><button id="closePlayerPreview" type="button" aria-label="Fechar prévia dos jogadores">×</button></div>
             <canvas id="playerPreviewCanvas" width="1280" height="720" aria-label="Prévia da área visível aos jogadores"></canvas>
-            <p>Somente a área do retângulo e os tokens publicados aparecem aqui. Na mesa online, esta é a visão enviada aos jogadores.</p>
+            <p>Esta é a prévia local da área dos jogadores. Com a transmissão pausada, ela é apenas um rascunho: os jogadores continuam no último quadro publicado.</p>
         </dialog>
 
         <div id="toolDock" class="tool-dock">
@@ -612,13 +623,16 @@
     <script src="assets/js/tabletop/tabletop-view.js?v=20260927-player-view"></script>
     <script src="assets/js/tabletop/tabletop-selection.js?v=20261005-multi-select"></script>
     <script src="assets/js/tabletop/tabletop-shortcuts.js?v=20261012-shortcuts"></script>
-    <script src="assets/js/tabletop/tabletop.js?v=20261012-workspace"></script>
+    <script src="assets/js/tabletop/tabletop.js?v=20261013-transmission-3"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.3/dist/umd/supabase.js"></script>
     <script src="assets/js/shared/supabase-config.js?v=20260928-online-tabletop"></script>
-    <script src="assets/js/tabletop/tabletop-online.js?v=20261012-workspace"></script>
+    <script src="assets/js/tabletop/tabletop-performance.js?v=20261013-transmission-2"></script>
+    <script src="assets/js/shared/tabletop-ice.js?v=20261013-transmission"></script>
+    <script src="assets/js/shared/tabletop-pointers.js?v=20261013-transmission-2"></script>
+    <script src="assets/js/tabletop/tabletop-online.js?v=20261013-transmission-3"></script>
     <script src="assets/js/tabletop/tabletop-documents.js?v=20260929-documents"></script>
     <script src="assets/js/tabletop/tabletop-hud.js?v=20261012-table-portal"></script>
-    <script src="assets/js/tabletop/tabletop-workspace.js?v=20261012-workspace"></script>
+    <script src="assets/js/tabletop/tabletop-workspace.js?v=20261013-transmission"></script>
 
 </body>
 </html>

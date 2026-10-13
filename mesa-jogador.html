@@ -4,7 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Mesa dos jogadores | R.E.A.L</title>
-    <link rel="stylesheet" href="assets/css/tabletop-guest.css?v=20261008-mobile-performance">
+    <meta name="robots" content="noindex, nofollow">
+    <link rel="icon" href="assets/images/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="assets/css/tabletop-guest.css?v=20261013-transmission">
+    <link rel="stylesheet" href="assets/css/tabletop-pointers.css?v=20261013-transmission">
     <link rel="stylesheet" href="assets/css/visitor-name.css?v=20260928-visitor">
     <script src="assets/js/shared/visitor-name.js?v=20260928-visitor"></script>
 </head>
@@ -17,17 +20,36 @@
             <button id="guestEconomy" class="guest-tabletop__economy" type="button" aria-pressed="false">
                 <strong>Economia</strong><small>Automática no celular</small>
             </button>
+            <label class="guest-quality">Qualidade
+                <select id="guestQuality" aria-label="Qualidade da transmissão">
+                    <option value="auto">Automática</option><option value="economy">Econômica · imagem</option>
+                    <option value="balanced">Equilibrada</option><option value="high">Alta</option>
+                </select>
+            </label>
+            <button id="guestPointerButton" class="guest-pointer-button" type="button" aria-pressed="false" hidden>◎ Apontar</button>
         </header>
+        <p id="guestPointerStatus" class="guest-pointer-status" role="status" aria-live="polite" hidden></p>
         <div class="guest-tabletop__stage">
+            <div id="guestViewport" class="guest-viewport">
             <video id="guestVideo" aria-label="Transmissão ao vivo da área dos jogadores" autoplay muted playsinline hidden></video>
             <img id="guestFrame" alt="Área da mesa publicada pelo mestre" hidden>
+            </div>
             <div id="guestWaiting" class="guest-tabletop__waiting">
                 <span aria-hidden="true">✦</span>
                 <h1>Aguardando o mestre</h1>
                 <p>A cena aparecerá aqui quando a transmissão começar.</p>
             </div>
         </div>
+        <div class="guest-view-tools" aria-label="Controles da sua visão">
+            <button id="guestReconnect" type="button">Reconectar</button>
+            <button id="guestZoomIn" type="button" aria-label="Ampliar sua visão">+</button>
+            <button id="guestZoomOut" type="button" aria-label="Reduzir sua visão">−</button>
+            <button id="guestResetView" type="button">Recentralizar</button>
+            <button id="guestFullscreen" type="button">Tela cheia</button>
+            <span>Zoom e arraste afetam só a sua tela.</span>
+        </div>
         <button id="guestDocumentOpen" class="guest-document__open" type="button" hidden>Ver pista revelada</button>
+        <div id="guestPointers" class="tabletop-pointers" aria-hidden="true"></div>
         <dialog id="guestDocument" class="guest-document" aria-labelledby="guestDocumentTitle">
             <div id="guestDocumentHandle" class="guest-document__head" tabindex="0" aria-label="Mover janela da pista. Arraste ou use as setas do teclado.">
                 <span>PISTA REVELADA <small>Arraste o topo para mover · bordas para ajustar</small></span>
@@ -53,11 +75,14 @@
             <button class="guest-document__resize guest-document__resize--sw" type="button" data-document-resize="sw" aria-label="Redimensionar janela pelo canto inferior esquerdo"></button>
             <button class="guest-document__resize guest-document__resize--nw" type="button" data-document-resize="nw" aria-label="Redimensionar janela pelo canto superior esquerdo"></button>
         </dialog>
-        <p class="guest-tabletop__note">Esta é uma visão somente para observar. O mestre controla o mapa e os tokens.</p>
+        <p class="guest-tabletop__note">O mestre controla o mapa e os tokens. Você pode apontar um local quando ele permitir.</p>
     </main>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.3/dist/umd/supabase.js"></script>
     <script src="assets/js/shared/supabase-config.js?v=20260928-online-tabletop"></script>
-    <script src="assets/js/tabletop/tabletop-performance.js?v=20261008-mobile-performance"></script>
-    <script src="assets/js/tabletop/tabletop-guest.js?v=20261008-mobile-performance"></script>
+    <script src="assets/js/shared/tabletop-ice.js?v=20261013-transmission"></script>
+    <script src="assets/js/tabletop/tabletop-performance.js?v=20261013-transmission-2"></script>
+    <script src="assets/js/shared/tabletop-pointers.js?v=20261013-transmission-2"></script>
+    <script src="assets/js/tabletop/tabletop-guest.js?v=20261013-transmission-2"></script>
+    <script src="assets/js/tabletop/tabletop-guest-viewport.js?v=20261013-transmission"></script>
 </body>
 </html>

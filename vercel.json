@@ -1,0 +1,14 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "buildCommand": "npm run build",
+  "installCommand": "",
+  "outputDirectory": "outputs/site",
+  "cleanUrls": false,
+  "headers": [
+    { "source": "/mesa.html", "headers": [{ "key": "X-Robots-Tag", "value": "noindex, nofollow" }] },
+    { "source": "/mesa-jogador.html", "headers": [{ "key": "X-Robots-Tag", "value": "noindex, nofollow" }] },
+    { "source": "/apoie.html", "headers": [{ "key": "X-Robots-Tag", "value": "noindex, follow" }] },
+    { "source": "/assets/images/apoio-pix.png", "headers": [{ "key": "X-Robots-Tag", "value": "noindex" }] }
+  ]
+}

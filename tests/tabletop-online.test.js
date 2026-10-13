@@ -25,13 +25,13 @@ assert.match(masterCode, /auth\.signUp/);
 assert.match(masterCode, /published_frame: frame/);
 assert.match(masterCode, /new RTCPeerConnection/);
 assert.match(masterCode, /kind: "offer"/);
-assert.match(masterCode, /maxBitrate = 420000/);
-assert.match(masterCode, /maxFramerate = 8/);
+assert.match(masterCode, /maxBitrate = profile.bitrate/);
+assert.match(masterCode, /maxFramerate = profile.fps/);
 assert.match(masterCode, /auth\.signOut/);
-assert.match(masterCode, /\.update\(\{ is_live: false, published_frame: null/);
+assert.match(masterCode, /\.update\(\{ is_live: false, transmission_paused: false, published_frame: null/);
 assert.match(tabletopCode, /capturePlayerFrame\(\)/);
-assert.match(tabletopCode, /previewCanvas\.captureStream\(0\)/);
-assert.match(tabletopCode, /previewCanvas\.captureStream\(8\)/);
+assert.match(tabletopCode, /output\.captureStream\(0\)/);
+assert.match(tabletopCode, /output\.captureStream\(15\)/);
 assert.match(tabletopCode, /playerStreamTrack\.requestFrame/);
 assert.match(tabletopCode, /playerStreamTrack\.contentHint = "detail"/);
 assert.match(tabletopCode, /published\.width = 720/);
@@ -49,7 +49,8 @@ assert.doesNotMatch(guestCode, /setInterval\(refresh/);
 assert.match(guestCode, /channel\.track\(\{ role: "viewer", name \}\)/);
 assert.match(masterCode, /\.on\("presence", \{ event: "sync" \}, showViewers\)/);
 assert.doesNotMatch(guestHtml, /id="(?:gameCanvas|toolToken|toolMap|tokenLibrary)"/);
-assert.match(edgeCode, /select", "is_live,published_frame,published_at"/);
+assert.match(edgeCode, /select", "is_live,published_frame,published_at,pointer_authority,transmission_paused"/);
+assert.match(edgeCode, /pointerAuthority: live/);
 assert.match(edgeCode, /unchanged/);
 assert.match(edgeCode, /knownPublishedAt/);
 assert.doesNotMatch(edgeCode, /select", "\*"/);
@@ -133,10 +134,10 @@ async function runMaster() {
     const ids = Object.fromEntries([
         "onlineStatus", "onlineAuthForm", "onlineMasterControls", "onlineToggle", "onlineInvite",
         "onlineCopy", "onlineMasterName", "onlineEmail", "onlinePassword", "onlineSignIn",
-        "onlineSignUp", "onlineSignOut", "onlineViewerCount", "onlineViewerList", "mobileViewerCount"
+        "onlineSignUp", "onlineSignOut", "onlineViewerCount", "onlineViewerList", "mobileViewerCount", "onlinePause", "onlinePauseStatus", "onlinePoint"
     ].map((id) => [id, { hidden: false, disabled: false, value: "", textContent: "",
         children: [], replaceChildren() { this.children = []; }, appendChild(child) { this.children.push(child); },
-        addEventListener(name, fn) { handlers[`${id}:${name}`] = fn; }, reportValidity() { return true; } }]));
+        addEventListener(name, fn) { handlers[`${id}:${name}`] = fn; }, setAttribute() {}, reportValidity() { return true; } }]));
     const user = { id: "master-1", email: "mestre@example.test" };
     const writes = [];
     let savedRoom = null;
@@ -155,13 +156,16 @@ async function runMaster() {
         removeChannel() {},
         auth: { onAuthStateChange() {}, getUser: async () => ({ data: { user } }) }
     };
+    let paused=false;
     const context = {
         document: { getElementById: (id) => ids[id], createElement: () => ({ textContent: "" }) },
         window: { innerWidth: 1200, innerHeight: 800, REAL_SUPABASE_CONFIG: { url: "https://example.supabase.co", publishableKey: "sb_publishable_test" },
-            REAL_TABLETOP_MASTER: { ready: Promise.resolve(), campaignKey: "autosave", capturePlayerFrame: () => "data:image/jpeg;base64,abc" },
+            REAL_TABLETOP_MASTER: { ready: Promise.resolve(), campaignKey: "autosave", capturePlayerFrame: () => "data:image/jpeg;base64,abc",
+                captureDraftFrame:()=>{assert.equal(paused,true,'capturar rascunho não descongela o vídeo');return 'data:image/jpeg;base64,draft'},
+                isTransmissionPaused:()=>paused,setTransmissionPaused:value=>{paused=value} },
             supabase: { createClient: () => client }, addEventListener(name, fn) { handlers[`window:${name}`] = fn; }, dispatchEvent() {} },
         location: { href: "https://example.test/mesa.html", protocol: "https:" },
-        URL, URLSearchParams, setTimeout, clearTimeout, Event, navigator: { clipboard: { writeText: async () => {} } }
+        URL, URLSearchParams, setTimeout, clearTimeout, setInterval() {}, clearInterval() {}, Event, navigator: { clipboard: { writeText: async () => {} } }
     };
     vm.runInNewContext(masterCode, context);
     await new Promise((resolve) => setImmediate(resolve));
@@ -173,10 +177,16 @@ async function runMaster() {
     assert.equal(writes[0].data.published_frame, "data:image/jpeg;base64,abc");
     assert.equal(ids.onlineCopy.disabled, false);
     assert.match(ids.onlineInvite.value, /mesa-jogador\.html#convite=/);
+    await handlers['onlinePause:click']();
+    assert.equal(paused,true);assert.equal(writes[1].data.transmission_paused,true);
+    assert.equal(Object.hasOwn(writes[1].data,'published_frame'),false,'pausar conserva a imagem publicada');
+    await context.window.REAL_TABLETOP_ONLINE.publish();assert.equal(writes.length,2,'mudanças privadas não são publicadas na pausa');
+    await handlers['onlinePause:click']();assert.equal(paused,false);
+    assert.equal(writes[2].data.published_frame,'data:image/jpeg;base64,draft');
     await handlers["onlineToggle:click"]();
-    assert.equal(writes[1].kind, "update");
-    assert.equal(writes[1].data.is_live, false);
-    assert.equal(writes[1].data.published_frame, null);
+    assert.equal(writes[3].kind, "update");
+    assert.equal(writes[3].data.is_live, false);
+    assert.equal(writes[3].data.published_frame, null);
 }
 
 async function runLive() {

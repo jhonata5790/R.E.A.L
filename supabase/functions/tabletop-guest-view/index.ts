@@ -40,7 +40,7 @@ Deno.serve(async (request: Request) => {
         if (!secretKey || !projectUrl) return json({ error: "Serviço indisponível" }, 503);
 
         const url = new URL("/rest/v1/tabletop_rooms", projectUrl);
-        url.searchParams.set("select", "is_live,published_frame,published_at");
+        url.searchParams.set("select", "is_live,published_frame,published_at,pointer_authority,transmission_paused");
         url.searchParams.set("invite_code", `eq.${inviteCode}`);
         url.searchParams.set("limit", "1");
         const response = await fetch(url, { headers: { apikey: secretKey, Accept: "application/json" } });
@@ -52,9 +52,12 @@ Deno.serve(async (request: Request) => {
         const unchanged = live && knownPublishedAt !== null && knownPublishedAt === room.published_at;
         return json({
             live,
+            paused: live && room.transmission_paused === true,
             unchanged,
             frame: live && !unchanged ? room.published_frame : null,
             publishedAt: room.published_at,
+            // Somente a chave pública da sessão; nunca a chave privada ou a linha completa da sala.
+            pointerAuthority: live ? room.pointer_authority || null : null,
         });
     } catch {
         return json({ error: "Convite inválido" }, 400);

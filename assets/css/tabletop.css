@@ -81,7 +81,7 @@ body {
 
 #gameCanvas:focus-visible { outline: 2px solid #f5a7b7; outline-offset: -3px; }
 
-body.hud-hidden #tabletop > :not(#gameCanvas):not(#shortcutHelp):not(#shortcutStatus) {
+body.hud-hidden #tabletop > :not(#gameCanvas):not(#masterPointers):not(#shortcutHelp):not(#shortcutStatus) {
     display: none !important;
 }
 
@@ -169,7 +169,7 @@ body.hud-hidden #tabletop > :not(#gameCanvas):not(#shortcutHelp):not(#shortcutSt
 }
 .hud-menu-trigger { left: 16px; gap: 4px; align-content: center; }
 .hud-menu-trigger span { display: block; width: 19px; height: 2px; background: #f3dce2; border-radius: 2px; }
-.viewer-peek-trigger { right: 16px; display: none; grid-template-columns: 22px auto; gap: 4px; padding: 0 9px; }
+.viewer-peek-trigger { right: 16px; display: grid; grid-template-columns: 22px auto; gap: 4px; padding: 0 9px; }
 .viewer-peek-trigger svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; }
 .viewer-peek-trigger span { min-width: 17px; font-size: 11px; font-weight: 800; }
 .hud-menu-trigger:hover, .viewer-peek-trigger:hover { background: #44202c; }
@@ -195,7 +195,7 @@ body.hud-hidden #tabletop > :not(#gameCanvas):not(#shortcutHelp):not(#shortcutSt
 .viewer-peek[hidden] { display: none; }
 .viewer-peek__heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .viewer-peek h2 { font: 600 16px Georgia, serif; }
-.viewer-peek__heading button { display: none; width: 34px; height: 34px; color: #fff1f3; background: transparent; border: 1px solid #8a6873; border-radius: 6px; font-size: 22px; cursor: pointer; }
+.viewer-peek__heading button { display: block; width: 34px; height: 34px; color: #fff1f3; background: transparent; border: 1px solid #8a6873; border-radius: 6px; font-size: 22px; cursor: pointer; }
 .viewer-peek__count { margin-top: 7px; color: #f2bec9; font-size: 11px; font-weight: 700; }
 .viewer-peek ul { margin: 10px 0 0; padding-left: 20px; color: #f5e8ec; font-size: 13px; line-height: 1.7; overflow-wrap: anywhere; }
 

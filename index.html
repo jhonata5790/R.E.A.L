@@ -4,20 +4,24 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="theme-color" content="#09070b">
-    <title>R.E.A.L | Tabletop online</title>
-    <link rel="stylesheet" href="assets/css/portal.css?v=20261012-workspace">
+    <title>R.E.A.L — Tabletop online para RPG</title>
+    <meta name="description" content="R.E.A.L é um tabletop online para RPG. Crie mesas, organize cenas, mapas e tokens e compartilhe a visão dos jogadores em tempo real.">
+    <meta name="robots" content="index, follow, max-image-preview:large">
+    <link rel="icon" href="assets/images/favicon.svg" type="image/svg+xml">
+    <!-- REAL:SEO -->
+    <link rel="stylesheet" href="assets/css/portal.css?v=20261013-donations">
     <link rel="stylesheet" href="assets/css/account.css?v=20261012-workspace">
 </head>
 <body>
     <div class="portal-shell">
         <header class="portal-header">
             <a class="portal-brand" href="#inicio" aria-label="R.E.A.L: início"><span class="portal-brand__mark" aria-hidden="true">✦</span><span><strong>R.E.A.L</strong><small>TABLETOP ONLINE</small></span></a>
-            <div class="portal-header__right"><span id="storageStatus" class="portal-storage" data-account-storage-status>Mesas neste aparelho</span><div id="accountSlot"></div></div>
+            <div class="portal-header__right"><a class="portal-support-link" href="apoie.html"><span aria-hidden="true">♡</span> Apoie o R.E.A.L</a><span id="storageStatus" class="portal-storage" data-account-storage-status>Mesas neste aparelho</span><div id="accountSlot"></div></div>
         </header>
         <main>
             <section id="view-home" aria-labelledby="portalTitle">
                 <div class="home-intro">
-                    <div><span class="eyebrow">PRONTO PARA A PRÓXIMA SESSÃO?</span><h1 id="portalTitle">Seu grupo.<br>Sua próxima cena.</h1><p>Prepare uma mesa, organize os materiais e encontre o grupo no mapa.</p></div>
+                    <div><span class="eyebrow">PRONTO PARA A PRÓXIMA SESSÃO?</span><h1 id="portalTitle">Seu grupo.<br>Sua próxima cena.</h1><p>O R.E.A.L é um tabletop online para RPG. Prepare sua mesa, organize cenas, mapas e tokens e compartilhe a visão dos jogadores em tempo real.</p></div>
                     <div class="portal-actions"><button id="createTable" class="button button--primary" type="button">＋ Criar mesa</button><button id="accessTable" class="button button--secondary" type="button">↗ Acessar por convite</button></div>
                 </div>
                 <a id="continueTable" class="continue-table" href="mesa.html" hidden><span class="continue-table__icon" aria-hidden="true">↗</span><span><small>DE ONDE VOCÊ PAROU</small><strong id="continueTableName">Continuar última mesa</strong></span><span aria-hidden="true">→</span></a>
@@ -29,9 +33,10 @@
                     <p id="noTableResults" class="portal-empty" hidden>Nenhuma mesa encontrada. Tente outro nome.</p>
                 </section>
                 <div class="storage-explainer"><span aria-hidden="true">◉</span><p><strong>Você sabe onde está cada coisa.</strong> Nome, descrição e capa podem ficar na conta. Cenas, mapas, tokens, documentos e anotações privadas ficam neste aparelho.</p></div>
+                <aside class="home-support" aria-label="Apoie o projeto"><span class="home-support__icon" aria-hidden="true">♡</span><div><strong>Sua próxima história também ajuda a nossa.</strong><p>Gosta de usar o R.E.A.L? Apoie o projeto com uma doação voluntária. Qualquer valor ajuda.</p></div><a class="button button--secondary" href="apoie.html">Conhecer e apoiar →</a></aside>
             </section>
 
-            <section id="view-table" class="table-room" aria-labelledby="tableTitle" hidden>
+            <section id="view-table" class="table-room" aria-labelledby="tableTitle" data-nosnippet hidden>
                 <div class="room-topline"><button id="backToHome" class="back-button" type="button">← Suas mesas</button><span class="room-badge">SALA DO MESTRE</span></div>
                 <header class="room-heading"><div><h1 id="tableTitle">Minha mesa</h1><p id="tableDescription"></p></div><div class="portal-actions"><button id="editTable" class="button button--secondary" type="button">Editar mesa</button><a id="openTabletop" class="button button--primary" href="mesa.html">Abrir tabletop →</a></div></header>
                 <div class="room-layout">
@@ -49,7 +54,7 @@
                 </div>
             </section>
         </main>
-        <footer class="portal-footer"><span>R.E.A.L</span><small>Todo mundo na mesma mesa.</small></footer>
+        <footer class="portal-footer"><span>R.E.A.L</span><a href="apoie.html">Apoie o projeto ♡</a><small>Todo mundo na mesma mesa.</small></footer>
     </div>
     <div id="portalToast" class="portal-toast" role="status" aria-live="polite" hidden></div>
 
@@ -64,7 +69,7 @@
     <script src="assets/js/shared/account.js?v=20261012-workspace"></script>
     <script src="assets/js/shared/table-workspace.js?v=20261012-workspace"></script>
     <script src="assets/js/portal/table-portal.js?v=20261012-workspace"></script>
-    <script src="assets/js/portal/room-sharing.js?v=20261012-workspace"></script>
+    <script src="assets/js/portal/room-sharing.js?v=20261013-transmission"></script>
     <script src="assets/js/portal/portal.js?v=20261012-workspace"></script>
 </body>
 </html>

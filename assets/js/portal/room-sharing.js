@@ -90,7 +90,7 @@
         const frame = await window.REAL_TABLE_WORKSPACE.renderSession(window.REAL_TABLE_WORKSPACE.active(workspace).session);
         if (captured !== generation) throw new Error("A sala aberta mudou. Tente novamente.");
         if (frame.length > 1000000) throw new Error("O quadro ficou grande demais. Use uma cena menor.");
-        const changes = { is_live: true, published_frame: frame, published_at: new Date().toISOString() };
+        const changes = { is_live: true, transmission_paused: false, published_frame: frame, published_at: new Date().toISOString(), pointer_authority: null };
         const request = room ? client().from("tabletop_rooms").update(changes).eq("id", room.id).eq("owner_id", user.id)
             : client().from("tabletop_rooms").insert({ ...changes, owner_id: user.id, campaign_key: capturedId });
         const { data, error } = await request.select("id,invite_code,is_live,published_at").single();
@@ -105,7 +105,7 @@
         if (!room?.is_live) return true;
         const user = account()?.currentUser(); if (!user) throw new Error("Entre na conta do mestre para encerrar.");
         const { data, error } = await client().from("tabletop_rooms")
-            .update({ is_live: false, published_frame: null, published_at: new Date().toISOString() })
+            .update({ is_live: false, published_frame: null, published_at: new Date().toISOString(), pointer_authority: null })
             .eq("id", room.id).eq("owner_id", user.id).select("id,invite_code,is_live,published_at").single();
         if (error) throw error;
         room = data;
@@ -125,7 +125,7 @@
             .eq("owner_id", user.id).eq("campaign_key", id).maybeSingle();
         if (error) throw error; if (!target?.is_live) return true;
         if (id === tableId) { room = target; return end(); }
-        const result = await client().from("tabletop_rooms").update({ is_live: false, published_frame: null, published_at: new Date().toISOString() }).eq("id", target.id).eq("owner_id", user.id);
+        const result = await client().from("tabletop_rooms").update({ is_live: false, published_frame: null, published_at: new Date().toISOString(), pointer_authority: null }).eq("id", target.id).eq("owner_id", user.id);
         if (result.error) throw result.error;
         const signal = client().channel(`real-tabletop:${target.invite_code}`);
         try { await signal.send({ type: "broadcast", event: "changed", payload: {} }); }

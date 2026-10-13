@@ -17,6 +17,16 @@ a { color: inherit; text-decoration: none; }
 .portal-brand strong { font-family: Georgia, serif; font-size: 20px; }
 .portal-brand small, .eyebrow { color: var(--accent-light); font-size: 9px; font-weight: 800; letter-spacing: .17em; }
 .portal-header__right { display: flex; align-items: center; gap: 20px; min-width: 0; }
+.portal-support-link { display: inline-flex; align-items: center; gap: 7px; flex-shrink: 0; min-height: 40px; color: #e0acbf; font-size: 11px; }
+.portal-support-link:hover { color: #fff7fa; }
+.portal-support-link > span { font-size: 19px; }
+.home-support { display: flex; align-items: center; gap: 18px; margin-top: 27px; padding: 22px; background: #fb3b5306; border: 1px solid #533040; border-radius: 14px; }
+.home-support__icon { flex-shrink: 0; color: #d5849c; font: 34px Georgia, serif; }
+.home-support > div { flex: 1; }
+.home-support strong { color: #e7c4d2; font-size: 13px; font-weight: 650; }
+.home-support p { margin: 7px 0 0; color: #b49baa; font-size: 11px; line-height: 1.7; }
+.portal-footer > a { padding: 7px; color: #c598ab; font-size: 11px; }
+@media (max-width: 700px) { .portal-header__right { gap: 9px; flex-wrap: wrap; justify-content: flex-end; } .portal-header .portal-storage { display: none; } .portal-support-link { min-height: 32px; font-size: 10px; } .home-support { flex-wrap: wrap; gap: 12px; padding: 18px; } .home-support > div { flex-basis: calc(100% - 50px); } .home-support > a { width: 100%; text-align: center; } .portal-footer { flex-wrap: wrap; gap: 8px; } }
 .portal-storage { color: #93838e; font-size: 11px; }
 .portal-header .real-account-button { position: static; max-width: 240px; box-shadow: none; padding: 8px 12px; }
 main { width: min(1440px, 100%); margin: 0 auto; padding: 34px clamp(18px, 4vw, 60px) 60px; }
